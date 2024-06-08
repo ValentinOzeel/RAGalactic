@@ -6,14 +6,51 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import chromadb
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.chroma import ChromaVectorStore
+from PyPDF2 import PdfFileReader, PdfFileWriter
 
 
+MAKE CLASS 
+EVALUATE RAG 
+MAKE API/STREAMLIT APP
+
+class RAGSinglePDF():
+    def __init__(self):
+        self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        self.data_folder_path = os.path.join(self.project_root, 'data')
+        self.db_folder_path = os.path.join(self.project_root, 'chroma_db_data')
+        # Ensure the destination directory exists
+        for path in [self.data_folder_path, self.db_folder_path]:
+            os.makedirs(path, exist_ok=True)
+
+        
+    def save_input_pdf(self, pdf_file_or_path, name:str):
+        try:        
+            reader = PdfReader(pdf_file_or_path)
+            writer = PdfWriter()
+            # Add all pages from the reader to the writer
+            for page_num in range(len(reader.pages)):
+                writer.add_page(reader.pages[page_num])
+            # Write the content to the destination PDF file
+            with open(os.path.join(self.data_folder_path, name), 'wb') as output_file:
+                writer.write(output_file)
+        
+        except Exception as e:
+            print(e)
+
+    def load_pdf(names:List=None):
+        if names:
+            
+            CHECK IF FILES EXISTS BEFORE LOAD 
+            THEN USE SimpleDirectoryReader(input_files=[xxx, yyy])
+        
+        else:
+            USE SimpleDirectoryReader(input_dir=XXXX, required_exts=['.pdf'])
+            
+
+        
 name_file_wo_ext = 'intro_quantum_mechs'
 extension = '.pdf'
 file_name = ''.join([name_file_wo_ext, extension])
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-data_path = os.path.join(project_root, 'data', file_name)
-db_path = os.path.join(project_root, 'chroma_db_data')
 
 
 # Load a PDF with llama index SimpleDirectoryReader
@@ -50,5 +87,5 @@ query_engine = index.as_query_engine(llm=llm)
 print('Query engine initialized.\n')
 
 # Perform a query and print the response
-response = query_engine.query("What are the main takeaways of the document ?")
+response = query_engine.query("As bulletpoints, what are the main takeaways of the document ?")
 print(response)
