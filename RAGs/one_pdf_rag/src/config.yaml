@@ -1,0 +1,2 @@
+# Path to the file where user IDs will be stored
+user_ids_file: RAGs\one_pdf_rag\data

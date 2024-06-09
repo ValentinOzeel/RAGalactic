@@ -1,5 +1,8 @@
 # Import modules
 import os
+import json
+import base64
+import uuid # For user ID
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -9,38 +12,75 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from PyPDF2 import PdfFileReader, PdfFileWriter
 
 
-MAKE CLASS 
+
 EVALUATE RAG 
-MAKE API/STREAMLIT APP
+
+
 
 class RAGSinglePDF():
-    def __init__(self):
+    def __init__(self, pdf_input):
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         self.data_folder_path = os.path.join(self.project_root, 'data')
         self.db_folder_path = os.path.join(self.project_root, 'chroma_db_data')
         # Ensure the destination directory exists
         for path in [self.data_folder_path, self.db_folder_path]:
             os.makedirs(path, exist_ok=True)
-
+        self.json_ids_path = os.path.join(self.data_folder_path, 'json_ids.json')
+        self.app_credentials_path = os.path.join(self.project_root, 'app_credentials', 'app_credentials.yaml')
         
-    def save_input_pdf(self, pdf_file_or_path, name:str):
-        try:        
-            reader = PdfReader(pdf_file_or_path)
-            writer = PdfWriter()
-            # Add all pages from the reader to the writer
-            for page_num in range(len(reader.pages)):
-                writer.add_page(reader.pages[page_num])
-            # Write the content to the destination PDF file
-            with open(os.path.join(self.data_folder_path, name), 'wb') as output_file:
-                writer.write(output_file)
-        
-        except Exception as e:
-            print(e)
+def get_cookie_manager_secret_key():
+    OPEN AND LOAD YAML at self.app_credentials_path:
+    if 'secret_key' not in credentials:
+        WRITE IN YAML credentials_yaml['secret_key'] = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8')
+    
+    return credentials_yaml['secret_key']
 
-    def load_pdf(names:List=None):
-        if names:
+# Get or create a user ID for the current session
+def get_user_id(cookies):
+    # Check if the user_id cookie is already set
+    if "user_id" not in cookies:
+        user_id = str(uuid.uuid4())
+        cookies["user_id"] = user_id
+        cookies.save()
+    else:
+        user_id = cookies["user_id"]
+
+    return user_id
+
+def get_users_pdf(self, id):
+    if os.path.exists(self.json_ids_path):
+        with open(self.json_ids_path, 'r') as f:
+            json_data = json.load(f)
+            return json_data[id]['files'] if json_data.get(id) else None
             
-            CHECK IF FILES EXISTS BEFORE LOAD 
+def add_new_json_data(self, id, file_name):
+    # Load existing user ids from json file, or create a new dictionary if the file does not exist
+    if os.path.exists(self.json_ids_path):
+        with open(self.json_ids_path, 'r') as f:
+            json_data = json.load(f)
+    else:
+        json_data = {}
+        
+    # Create ID entry if doesnt exists
+    if not json_data.get(id):
+        json_data[id] = {'files': [file_name]}
+    # Add file to ID's files if file not in ID's files already
+    elif file_name not in json_data[id]['files']:
+        json_data[id]['files'].append(file_name)
+
+    # Write the updated data back to the JSON file
+    with open(self.json_ids_path, 'w') as f:
+        json.dump(json_data, f, indent=4)
+
+
+
+
+
+
+    def load_pdf(name:str):
+        if name:
+            
+            if os.path.isfile()
             THEN USE SimpleDirectoryReader(input_files=[xxx, yyy])
         
         else:
