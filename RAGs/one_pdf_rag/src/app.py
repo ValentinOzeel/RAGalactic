@@ -58,11 +58,11 @@ class RAGPDFapp():
         else:
             user_id = cookies["user_id"]
 
-        return user_id
+        return user_id[:20]
     
     def _ask_inputs(self):
         if self.input_source == 'load_new_pdf':
-            pdf_input = st.file_uploader("Please upload your PDF file", type="pdf")
+            pdf_input = st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf")
             self.load_new_pdf(pdf_input)
             
         elif self.input_source == 'previously_loaded_pdf':
@@ -75,7 +75,7 @@ class RAGPDFapp():
             # If not, user needs to upload a pdf, carry out embbedings etc..
             else:
                 st.write('You currently do not have loaded any pdf yet.')
-                pdf_input = st.file_uploader("Please upload your PDF file", type="pdf")
+                pdf_input = st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf")
                 self.load_new_pdf(pdf_input)
         
 
@@ -85,8 +85,9 @@ class RAGPDFapp():
         
         if query:
             response = self.rag_cls_inst.run_query(query_engine, query)
-            st.write(response)
-                  
+            st.write(response.response)
+            #st.write(response)  
+            
     def load_new_pdf(self, pdf_input):
         # Validate pdf input through pydantic
         validate_pdf_input(pdf_input)
@@ -94,7 +95,7 @@ class RAGPDFapp():
         self._chat_with_pdf(query_engine)
     
     def previously_loaded_pdf(self, selected_pdf):
-        query_engine = self.rag_cls_inst.load_existing_pdf(selected_pdf)
+        query_engine = self.rag_cls_inst.load_existing_pdf(selected_pdf)        
         self._chat_with_pdf(query_engine)
 
 
