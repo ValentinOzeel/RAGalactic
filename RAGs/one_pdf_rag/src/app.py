@@ -12,8 +12,9 @@ from rag import RAGSinglePDF
     
 class RAGPDFapp():
     def __init__(self):
-        st.title("RAGSinglePDF")
-        st.write("This app enables you to talk to your favorite PDF.")
+        st.sidebar.title("RAGSinglePDF")
+        st.sidebar.write("This app enables you to talk to your favorite PDF.")
+        st.title('Welcome to RAGalactic!')
         
         # Get the cookie manager key
         secret_key = self._get_cookie_manager_secret_key()
@@ -25,11 +26,11 @@ class RAGPDFapp():
         self.user_id = self._get_user_id(cookies)
         # Add user ID as a query parameter in the URL
         st.query_params.user_id = self.user_id
-
+        # Initialize messages in session_state
+        self._init_messages()
         # Create instance of RAGSinglePDF class
         self.rag_cls_inst = RAGSinglePDF(user_id=self.user_id)
-        # Option to select input source
-        self.input_source = st.radio("Select input source:", ('load_new_pdf', 'previously_loaded_pdf'))
+
         self._ask_inputs()
 
     def _get_cookie_manager_secret_key(self):
@@ -60,33 +61,61 @@ class RAGPDFapp():
 
         return user_id[:20]
     
+    def _init_messages(self):
+        # Initialize chat history
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Display chat messages from history on app rerun
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+    
     def _ask_inputs(self):
-        if self.input_source == 'load_new_pdf':
-            pdf_input = st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf")
+
+        
+        input_source = self._ask_new_or_previously_loaded()
+        
+        if input_source == 'load_new_pdf':
+            pdf_input = self._ask_pdf_input()
             self.load_new_pdf(pdf_input)
             
-        elif self.input_source == 'previously_loaded_pdf':
+        elif input_source == 'previously_loaded_pdf':
             pdfs = self.rag_cls_inst.get_users_pdf()
             
             # If user already loaded pdf in the past, talk to preexiting embbedings
             if pdfs:
-                selected_pdf = st.selectbox("Select a pre-existing PDF", pdfs)
+                
+                #selected_pdf = st.sidebar.multiselect('From your previously loaded PDFs, select the one(s) you want to talk to', pdfs)
+                selected_pdf = st.sidebar.selectbox("Select a pre-existing PDF", pdfs)
                 self.previously_loaded_pdf(selected_pdf)
             # If not, user needs to upload a pdf, carry out embbedings etc..
             else:
-                st.write('You currently do not have loaded any pdf yet.')
-                pdf_input = st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf")
+                st.sidebar.write('You currently do not have loaded any pdf yet.')
+                pdf_input = self._ask_pdf_input()
                 self.load_new_pdf(pdf_input)
         
-
+    def _ask_new_or_previously_loaded(self):
+        # Option to select input source
+        return st.sidebar.radio("Select input source:", ('load_new_pdf', 'previously_loaded_pdf'))
+    
+    def _ask_pdf_input(self):
+        return st.sidebar.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf")
+    
+    
+    #def _ask_tag():
+    
     def _chat_with_pdf(self, query_engine):
-        st.write("You can now start chatting with your PDF.")
-        query = st.text_input("Ask something about the PDF:")
-        
-        if query:
-            response = self.rag_cls_inst.run_query(query_engine, query)
-            st.write(response.response)
-            #st.write(response)  
+        if query := st.chat_input("You can now start chatting with your PDF."):
+            st.session_state.messages.append({"role": "user", "content": query})
+            with st.chat_message("user"):
+                st.markdown(query)
+
+            with st.chat_message("assistant"):
+                if query:
+                    response = self.rag_cls_inst.run_query(query_engine, query)
+                    st.markdown(response.response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
             
     def load_new_pdf(self, pdf_input):
         # Validate pdf input through pydantic
