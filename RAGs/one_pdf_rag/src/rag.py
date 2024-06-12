@@ -45,6 +45,7 @@ class RAGSinglePDF():
         self._init_llm_and_embedd_models()
         
         self.parser = self._get_parser()
+        self.memory, self.streaming = None, None
         
         self.user_id = user_id
         self.chroma_client = self._get_chromadb_client()
@@ -54,6 +55,10 @@ class RAGSinglePDF():
         # Initialize llm and ServiceContext
         Settings.llm = self.llm
         Settings.embed_model = self.embed_model
+
+    def _set_engine_feature(self, engine_memory, streaming):
+        self.memory, self.streaming = engine_memory, streaming
+         
         
     def _get_parser(self):
         return LlamaParse(
@@ -82,10 +87,19 @@ class RAGSinglePDF():
     
     
     
-    
+
+    def _create_corresponding_engine(self, index, top_k=5, chat_mode='condense_plus_context'):
+        if self.memory:
+            return self._create_chat_engine(index, chat_mode, self.streaming)
+        else:
+            return self._create_query_engine(index, top_k, self.streaming)
+        
             
-    def _create_query_engine(self, index):
-        return index.as_query_engine(llm=self.llm)
+    def _create_query_engine(self, index, top_k:int, streaming:bool):
+        return index.as_query_engine(similarity_top_k=top_k, streaming=streaming)
+    
+    def _create_chat_engine(self, index, chat_mode:str, streaming:bool):
+        return index.as_chat_engine(chat_mode=chat_mode, streaming=streaming)
 
  
 
@@ -149,8 +163,8 @@ class RAGSinglePDF():
         self._add_new_json_data(file_name=pdf_input.name)
         # Delete temp pdf
    #     self._delete_temp_pdf(temp_path)
-        # Create query engine
-        return self._create_query_engine(index)
+        # Create engine
+        return self._create_corresponding_engine(index)
 
 
     
@@ -173,11 +187,17 @@ class RAGSinglePDF():
         _, vector_store, _ = self._get_chromadb_setup(pdf_name)
         index = self._get_index(vector_store)
         # Create query engine
-        return self._create_query_engine(index)
+        return self._create_corresponding_engine(index)
 
+    
+    
+    
         
     def run_query(self, query_engine, query_text:str):
         return query_engine.query(query_text)
  
- 
+    def run_chat(self, chat_engine, prompt:str):
+        return chat_engine.stream_chat(prompt) if self.streaming else chat_engine.chat(prompt)
+    
 
+         

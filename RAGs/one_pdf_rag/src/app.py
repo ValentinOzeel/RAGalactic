@@ -12,7 +12,7 @@ from rag import RAGSinglePDF
     
 class RAGPDFapp():
     def __init__(self):
-        st.sidebar.title("RAGSinglePDF")
+        st.sidebar.title("RAGalactic")
         st.sidebar.write("This app enables you to talk to your favorite PDF.")
         st.title('Welcome to RAGalactic!')
         
@@ -72,9 +72,8 @@ class RAGPDFapp():
                 st.markdown(message["content"])
     
     def _ask_inputs(self):
-
-        
         input_source = self._ask_new_or_previously_loaded()
+        self.engine_memory, self.streaming = self._ask_engine_features()        
         
         if input_source == 'load_new_pdf':
             pdf_input = self._ask_pdf_input()
@@ -85,9 +84,7 @@ class RAGPDFapp():
             
             # If user already loaded pdf in the past, talk to preexiting embbedings
             if pdfs:
-                
-                #selected_pdf = st.sidebar.multiselect('From your previously loaded PDFs, select the one(s) you want to talk to', pdfs)
-                selected_pdf = st.sidebar.selectbox("Select a pre-existing PDF", pdfs)
+                selected_pdf = self._ask_previously_loaded_pdfs(pdfs)
                 self.previously_loaded_pdf(selected_pdf)
             # If not, user needs to upload a pdf, carry out embbedings etc..
             else:
@@ -97,35 +94,58 @@ class RAGPDFapp():
         
     def _ask_new_or_previously_loaded(self):
         # Option to select input source
-        return st.sidebar.radio("Select input source:", ('load_new_pdf', 'previously_loaded_pdf'))
+        return st.sidebar.radio("Select input source:", ('load_new_pdf', 'previously_loaded_pdf'), on_change=self._empty_chat_callback,)
+
+    def _ask_engine_features(self):
+        memory = st.sidebar.radio("LLM memory:", (True, False), on_change=self._empty_chat_callback, horizontal=True)
+        streaming = st.sidebar.radio("LLM response streaming:", (True, False), on_change=self._empty_chat_callback, horizontal=True)
+        return memory, streaming
+    
+    def _ask_previously_loaded_pdfs(self, pdfs):
+        return st.sidebar.selectbox("Select a pre-existing PDF", pdfs, on_change=self._empty_chat_callback,)
     
     def _ask_pdf_input(self):
-        return st.sidebar.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf")
+        pdf_input = st.sidebar.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf", on_change=self._empty_chat_callback)
+        y_or_n = st.sidebar.radio('Do you want to add a tag to your PDF ?', ['yes','no'])
+        if y_or_n == 'yes':
+            tag = st.sidebar.text_input('Please enter the desired tag for your PDF.')
+        return pdf_input
     
+
     
     #def _ask_tag():
-    
-    def _chat_with_pdf(self, query_engine):
-        if query := st.chat_input("You can now start chatting with your PDF."):
-            st.session_state.messages.append({"role": "user", "content": query})
+    def _empty_chat_callback(self):
+        st.session_state.messages = []
+        
+        
+    def _chat_with_pdf(self, engine):
+        if prompt := st.chat_input("You can now start chatting with your PDF."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
-                st.markdown(query)
+                st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                if query:
-                    response = self.rag_cls_inst.run_query(query_engine, query)
-                    st.markdown(response.response)
+                if prompt:
+                    rag_response = self.rag_cls_inst.run_chat(engine, prompt) if self.engine_memory else self.rag_cls_inst.run_query(engine, prompt)
+                    response = st.write_stream(rag_response.response_gen) if self.streaming else st.markdown(rag_response.response)
+                    
             st.session_state.messages.append({"role": "assistant", "content": response})
+
+    
             
     def load_new_pdf(self, pdf_input):
-        # Validate pdf input through pydantic
-        validate_pdf_input(pdf_input)
-        query_engine = self.rag_cls_inst.load_new_pdf(pdf_input)
-        self._chat_with_pdf(query_engine)
+        if pdf_input:
+            # Validate pdf input through pydantic
+            validate_pdf_input(pdf_input)
+            self.rag_cls_inst._set_engine_feature(self.engine_memory, self.streaming)
+            engine = self.rag_cls_inst.load_new_pdf(pdf_input)
+            self._chat_with_pdf(engine)
     
     def previously_loaded_pdf(self, selected_pdf):
-        query_engine = self.rag_cls_inst.load_existing_pdf(selected_pdf)        
-        self._chat_with_pdf(query_engine)
+        if selected_pdf:
+            self.rag_cls_inst._set_engine_feature(self.engine_memory, self.streaming)
+            engine = self.rag_cls_inst.load_existing_pdf(selected_pdf)        
+            self._chat_with_pdf(engine)
 
 
 
