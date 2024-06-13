@@ -34,7 +34,8 @@ class RAGPDFapp():
         st.query_params.user_id = self.user_id
         # Initialize messages in session_state
         self._init_messages()
-
+        # Create instance of RAGSinglePDF class
+        self.rag_cls_inst = RAGSinglePDF(user_id=self.user_id)
 
         logging.debug(f'CLASS INIT')
         self.memory, self.streaming = None, None
