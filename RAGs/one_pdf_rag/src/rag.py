@@ -2,6 +2,9 @@
 import os
 import json
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.core.storage.chat_store import SimpleChatStore
+from llama_index.core.llms import ChatMessage
 from llama_parse import LlamaParse
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -14,12 +17,19 @@ import nest_asyncio
 nest_asyncio.apply()
 
 
-
+from typing import Dict, Tuple, List
 
 # EVALUATE RAG 
 
 
 
+import logging
+#logging.basicConfig(level=logging.DEBUG)
+#logging.debug('This is a debug message')
+#logging.info('This is an info message')
+#logging.warning('This is a warning message')
+#logging.error('This is an error message')
+#logging.critical('This is a critical message')
 
 
 
@@ -50,7 +60,32 @@ class RAGSinglePDF():
         self.user_id = user_id
         self.chroma_client = self._get_chromadb_client()
 
-    
+        self.context_prompt = (
+                "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in mind to accomodate your responses. "
+                "This system enables users to upload PDFs, pose questions about their content, and receive accurate and detailed responses. "
+                "Your primary objective is to provide the highest quality assistance by leveraging your understanding of the user's queries and the information retrieved from the documents as well as the chat history.\n\n"
+
+                "Your role encompasses the following responsibilities:\n"
+                "1. **Understand User Queries**: Accurately interpret the questions or requests posed by users about their PDF documents.\n"
+                "2. **Retrieve Relevant Information**: Utilize the document retrieval system to obtain the most pertinent information in response to the user's query.\n"
+                "3. **Generate Accurate Responses**: Formulate clear, concise, and informative answers based on the retrieved information and the chat history.\n\n"
+
+                "For the current conversation, refer to the following relevant documents:\n"
+                "{context_str}\n\n"
+
+                "Guidelines:\n"
+                "1. **Content-Based Responses**: Ensure all answers are grounded in the actual content of the documents.\n"
+                "2. **Accurate Referencing**: Accurately reference the provided documents to ensure contextual relevance.\n"
+                "3. **Continuity and Coherence**: Integrate information from previous chat history to maintain a seamless and coherent interaction.\n"
+                "4. **Clear and Comprehensive Answers**: Strive to deliver clear, accurate, and thorough responses to user inquiries.\n"
+                "5. **Professional Tone**: Maintain a professional, courteous, and respectful tone throughout all interactions.\n"
+                "6. **Expert-Level Assistance**: If the provided documents do not cover the user's query, offer general expert-level knowledge to address the question effectively.\n\n"
+
+                "Instruction: Utilize the preceding chat history and the context above to engage with and assist the user proficiently. Prioritize clarity, accuracy, and relevance in all responses, ensuring a seamless and informative user experience."
+            )
+
+
+
     def _init_llm_and_embedd_models(self):
         # Initialize llm and ServiceContext
         Settings.llm = self.llm
@@ -58,7 +93,8 @@ class RAGSinglePDF():
 
     def _set_engine_feature(self, engine_memory, streaming):
         self.memory, self.streaming = engine_memory, streaming
-         
+        if self.memory:
+            self.manage_chat_history(create_or_reset=True)
         
     def _get_parser(self):
         return LlamaParse(
@@ -88,18 +124,31 @@ class RAGSinglePDF():
     
     
 
-    def _create_corresponding_engine(self, index, top_k=5, chat_mode='condense_plus_context'):
+    def _create_corresponding_engine(self, index, top_k=10, chat_mode='condense_plus_context'):
         if self.memory:
             return self._create_chat_engine(index, chat_mode, self.streaming)
         else:
             return self._create_query_engine(index, top_k, self.streaming)
         
-            
+    def _create_chat_engine(self, index, chat_mode:str, streaming:bool):
+        return index.as_chat_engine(chat_mode=chat_mode, 
+                                    streaming=streaming,
+                                    memory= ChatMemoryBuffer.from_defaults(
+                                                 token_limit=10000,
+                                                 chat_store=SimpleChatStore(),
+                                                 chat_store_key=self.user_id,
+                                             ),
+                                    context_prompt=self.context_prompt,
+                                    verbose=False,                            
+                                    )
+                
     def _create_query_engine(self, index, top_k:int, streaming:bool):
         return index.as_query_engine(similarity_top_k=top_k, streaming=streaming)
     
-    def _create_chat_engine(self, index, chat_mode:str, streaming:bool):
-        return index.as_chat_engine(chat_mode=chat_mode, streaming=streaming)
+
+
+
+
 
  
 
@@ -129,8 +178,7 @@ class RAGSinglePDF():
         # Create VectorStoreIndex and save it with a specific document ID
         return VectorStoreIndex.from_documents(docs, storage_context=storage_context)
     
-    
-    
+
  
     def _add_new_json_data(self, file_name):
         # Load existing user ids from json file, or create a new dictionary if the file does not exist
@@ -197,7 +245,13 @@ class RAGSinglePDF():
         return query_engine.query(query_text)
  
     def run_chat(self, chat_engine, prompt:str):
-        return chat_engine.stream_chat(prompt) if self.streaming else chat_engine.chat(prompt)
+        return chat_engine.stream_chat(prompt, chat_history=self.chat_history) if self.streaming else chat_engine.chat(prompt, chat_history=self.chat_history)
     
 
-         
+    def manage_chat_history(self, create_or_reset:bool=False, to_append:Tuple=(), get:bool=False):
+        if create_or_reset:
+            self.chat_history = []
+        if to_append and isinstance(to_append, Tuple):
+            self.chat_history.append(ChatMessage(role=to_append[0], content=to_append[1])) 
+        if get:
+            return self.chat_history
