@@ -38,7 +38,7 @@ import logging
 
 
 class RAGSinglePDF():
-    def __init__(self, user_id):
+    def __init__(self):
         
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         self.data_folder_path = os.path.join(self.project_root, 'data')
@@ -56,8 +56,9 @@ class RAGSinglePDF():
         
         self.parser = self._get_parser()
         self.memory, self.streaming = None, None
+        self.chat_history = []
         
-        self.user_id = user_id
+        self.user_id = None
         self.chroma_client = self._get_chromadb_client()
 
         self.context_prompt = (
@@ -91,6 +92,9 @@ class RAGSinglePDF():
         Settings.llm = self.llm
         Settings.embed_model = self.embed_model
 
+    def _set_user_id(self, user_id):
+        self.user_id = user_id 
+        
     def _set_engine_feature(self, engine_memory, streaming):
         self.memory, self.streaming = engine_memory, streaming
         if self.memory:
@@ -109,7 +113,6 @@ class RAGSinglePDF():
         # Create Chroma DB client and store
         return chromadb.PersistentClient(path=self.db_folder_path)
         
-    
     def _get_chromadb_setup(self, pdf_name):
         target_name = '_'.join([self.user_id, pdf_name])
         # Check if the collection already exists
@@ -124,13 +127,13 @@ class RAGSinglePDF():
     
     
 
-    def _create_corresponding_engine(self, index, top_k=10, chat_mode='condense_plus_context'):
+    def _create_corresponding_engine(self, index, top_k=10, chat_mode='condense_plus_context', filters=None):
         if self.memory:
-            return self._create_chat_engine(index, chat_mode, self.streaming)
+            return self._create_chat_engine(index, chat_mode, self.streaming, filters)
         else:
-            return self._create_query_engine(index, top_k, self.streaming)
+            return self._create_query_engine(index, top_k, self.streaming, filters)
         
-    def _create_chat_engine(self, index, chat_mode:str, streaming:bool):
+    def _create_chat_engine(self, index, chat_mode:str, streaming:bool, filters):
         return index.as_chat_engine(chat_mode=chat_mode, 
                                     streaming=streaming,
                                     memory= ChatMemoryBuffer.from_defaults(
@@ -139,11 +142,12 @@ class RAGSinglePDF():
                                                  chat_store_key=self.user_id,
                                              ),
                                     context_prompt=self.context_prompt,
+                                    filters=filters,
                                     verbose=False,                            
                                     )
                 
-    def _create_query_engine(self, index, top_k:int, streaming:bool):
-        return index.as_query_engine(similarity_top_k=top_k, streaming=streaming)
+    def _create_query_engine(self, index, top_k:int, streaming:bool, filters):
+        return index.as_query_engine(similarity_top_k=top_k, streaming=streaming, filters=filters)
     
 
 
@@ -165,12 +169,14 @@ class RAGSinglePDF():
         if os.path.exists(temp_pdf_path):
             os.remove(temp_pdf_path)
 
-    def _parse_pdf(self, dir_path:str):
+
+    def _parse_pdf(self, dir_path:str, tags:List[str]):
+        SimpleDirectoryReader()
         return SimpleDirectoryReader(
             dir_path,
             required_exts=[".pdf"],
             filename_as_id=True,
-            #file_metadata= lambda filepath: {'file_name': os.path.basename(filepath)}, 
+            file_metadata= lambda filepath: {'file_name': os.path.basename(filepath), 'tags': tags}, 
             file_extractor={".pdf": self.parser}
         ).load_data()
 
@@ -178,9 +184,8 @@ class RAGSinglePDF():
         # Create VectorStoreIndex and save it with a specific document ID
         return VectorStoreIndex.from_documents(docs, storage_context=storage_context)
     
-
  
-    def _add_new_json_data(self, file_name):
+    def _add_new_json_data(self, file_name:str, tags:List[str]):
         # Load existing user ids from json file, or create a new dictionary if the file does not exist
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
@@ -190,25 +195,25 @@ class RAGSinglePDF():
 
         # Create ID entry if doesnt exists
         if not json_data.get(self.user_id):
-            json_data[self.user_id] = {'files': [file_name]}
+            json_data[self.user_id] = {'files': [file_name], 'tags': tags}
         # Add file to ID's files if file not in ID's files already
         elif file_name not in json_data[self.user_id]['files']:
             json_data[self.user_id]['files'].append(file_name)
-
+            json_data[self.user_id]['tags'].append(tags)
         # Write the updated data back to the JSON file
         with open(self.json_ids_path, 'w') as f:
             json.dump(json_data, f, indent=4)
              
-    def load_new_pdf(self, pdf_input):
+    def load_new_pdf(self, pdf_input, tags:List[str]=None):
         _, _, storage_context = self._get_chromadb_setup(pdf_input.name)
         # Temp save the pdf
         temp_path = self._temp_save_pdf(pdf_input, dir_path=self.data_folder_path)
         # Parse pdf (temp saved in dir self.data_folder_path)
-        docs = self._parse_pdf(dir_path=self.data_folder_path)
+        docs = self._parse_pdf(dir_path=self.data_folder_path, tags=tags)
         # Create vector indexing and save it in database
         index = self._create_index(docs, storage_context)
         # Add input pdf name to corresponding user ID in 
-        self._add_new_json_data(file_name=pdf_input.name)
+        self._add_new_json_data(file_name=pdf_input.name, tags=tags)
         # Delete temp pdf
    #     self._delete_temp_pdf(temp_path)
         # Create engine
@@ -220,17 +225,40 @@ class RAGSinglePDF():
 
 
         
-    def get_users_pdf(self):
+    def get_user_pdfs(self, tagged_with:List[str]=None):
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
                 json_data = json.load(f)
-                return json_data[self.user_id]['files'] if json_data.get(self.user_id) else None  
+                # If there is no tag passed to the method, return all file names
+                if not tagged_with:
+                    return json_data[self.user_id]['files'] if json_data.get(self.user_id) else None  
+                # If tag is passed, zip over the file names list and the list of tag lists to retrieve every file names tagged with the tag
+                else:
+                    if json_data.get(self.user_id):
+                        files = json_data[self.user_id]['files']
+                        tags = json_data[self.user_id]['tags']
+                        # Get all file names where every tag in 'tagged_with' is present in the corresponding 'file_tags'.
+                        # - The 'zip(files, tags)' pairs each file with its associated tags.
+                        # - The 'all(tag in file_tags for tag in tagged_with)' checks if all tags in 'tagged_with' are in the current 'file_tags'
+                        return [file for file, file_tags in zip(files, tags) if all(tag in file_tags for tag in tagged_with)]
+                        
+    def get_users_tags(self):
+        if os.path.exists(self.json_ids_path):
+            with open(self.json_ids_path, 'r') as f:
+                json_data = json.load(f)
+                # Iterate over the list of tag lists 'json_data[self.user_id]['tags']' and gather all tags from each list. Then keep unique value by transforming to a set.
+                return list(set([[tag for tag_list in json_data[self.user_id]['tags'] for tag in tag_list]]))
+
+
+
+
+        
         
     def _get_index(self, vector_store):
         return VectorStoreIndex.from_vector_store(vector_store)
 
         
-    def load_existing_pdf(self, pdf_name):
+    def load_existing_pdf(self, pdf_name, tags:str=None):
         ## Load existing index for a document from database
         _, vector_store, _ = self._get_chromadb_setup(pdf_name)
         index = self._get_index(vector_store)
@@ -248,9 +276,11 @@ class RAGSinglePDF():
         return chat_engine.stream_chat(prompt, chat_history=self.chat_history) if self.streaming else chat_engine.chat(prompt, chat_history=self.chat_history)
     
 
-    def manage_chat_history(self, create_or_reset:bool=False, to_append:Tuple=(), get:bool=False):
+    def manage_chat_history(self, create_or_reset:bool=False, equal=[], to_append:Tuple=(), get:bool=False):
         if create_or_reset:
             self.chat_history = []
+        if equal and isinstance(to_append, List):
+            self.chat_history = equal
         if to_append and isinstance(to_append, Tuple):
             self.chat_history.append(ChatMessage(role=to_append[0], content=to_append[1])) 
         if get:
