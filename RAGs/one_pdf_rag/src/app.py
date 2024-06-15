@@ -2,6 +2,7 @@ import os
 import yaml 
 import base64
 import uuid # For user ID
+import time
 
 import streamlit as st
 from streamlit_cookies_manager import EncryptedCookieManager
@@ -43,19 +44,20 @@ class RAGPDFapp():
         self._init_llama_index_chat_history()
 
         # Set user_id in RAG_CLS_INST
-        RAG_CLS_INST._set_user_id(self.user_id)
+        RAG_CLS_INST.set_user_id(self.user_id)
         
         
         logging.debug(f'CLASS INIT')
         self.memory, self.streaming = None, None
         self.input_source = None 
         self.pdf_input, self.tags_pdf_input = None, None
+        self.pdf_select_param = None
         self.selected_pdfs = None 
 
         
-        with st.sidebar:
-            self.ask_app_parameters()
-            self.ask_input()
+
+        self.ask_app_parameters()
+        self.ask_input()
         self.run_chatbot()
         
         
@@ -111,8 +113,9 @@ class RAGPDFapp():
 
     def ask_app_parameters(self):
         logging.debug(f'ASK PARAMS')
-        self._ask_engine_features()
-        self._ask_new_or_previously_loaded()
+        with st.sidebar:
+            self._ask_engine_features()
+            self._ask_new_or_previously_loaded()
 
     def _ask_engine_features(self):
         self.memory = st.radio("LLM memory:", (False, True), on_change=self._empty_chat_and_set_engine_features_callback, horizontal=True)
@@ -120,89 +123,132 @@ class RAGPDFapp():
            
     def _ask_new_or_previously_loaded(self):
         # Option to select input source
-        self.input_source = st.radio("Select input source:", ('load_new_pdf', 'previously_loaded_pdf'), on_change=self._ask_input_callback)
+        self.input_source = st.radio("Select input source:", ('load_new_pdf', 'previously_loaded_pdf'), on_change=self._empty_chat_callback)
 
     def _empty_chat_and_set_engine_features_callback(self):
         st.session_state.messages = []
+        st.session_state.chat_history = []
         RAG_CLS_INST._set_engine_feature(self.memory, self.streaming)
 
     def _ask_input_callback(self):
         st.session_state.messages = []
+        st.session_state.chat_history = []
         self.ask_input()
         
-    
+    def _empty_chat_callback(self):
+        st.session_state.messages = []
+        st.session_state.chat_history = []
+        
     #@st.experimental_fragment
     def ask_input(self):
         logging.debug(f'ASK INPUT')
-        if self.input_source == 'load_new_pdf':
-            self._ask_pdf_input_and_tags()
-
-        # If user already loaded pdf in the past, talk to preexiting embbedings
-        elif self.input_source == 'previously_loaded_pdf':
-            all_pdfs = RAG_CLS_INST.get_user_pdfs()
-
-            # If not, user needs to upload a pdf, carry out embbedings etc..
-            if not all_pdfs:
-                st.write('You currently do not have loaded any pdf yet.')
+        with st.sidebar:
+            if self.input_source == 'load_new_pdf':
                 self._ask_pdf_input_and_tags()
-                
-            # Else we can select previously loaded pdfs
-            else:
-                self._pdf_selection_parameter()
-                   
-                   
-                   
-            #CHANGE THE CALLBACKSSSSSSSSS !!!!
-            #RESET self.pdf_select_param and other attributes AFTER USAGE
-            
-
-            if self.pdf_select_param:
-                if self.pdf_select_param == 'show_all_pdf_names':
-                    self._ask_all_previously_loaded_pdfs(all_pdfs)
-                   
-                else:
-                    all_tags = RAG_CLS_INST.get_users_tags()
-                    if not all_tags: 
-                        st.write('You currently do not have loaded pdf assiocated with a tag yet.')
-                        self._pdf_selection_parameter()
-                        
-                    selected_tags = self._ask_which_tags(all_tags)
-                    files_with_selected_tags = RAG_CLS_INST.get_user_pdfs(tagged_with=selected_tags)
+    
+            # If user already loaded pdf in the past, talk to preexiting embbedings
+            elif self.input_source == 'previously_loaded_pdf':
+                all_pdfs = RAG_CLS_INST.get_user_pdfs()
+    
+                # If not, user needs to upload a pdf, carry out embbedings etc..
+                if not all_pdfs:
+                    st.write('You currently do not have loaded any pdf yet. Please load one below:')
+                    self._ask_pdf_input_and_tags()
                     
-                    if self.pdf_select_param == 'filter_pdf_with_tag':
-                        self._ask_previously_loaded_pdfs_with_tags(files_with_selected_tags)
+                # Else we can select previously loaded pdfs
+                else:
+                    self._pdf_selection_parameter()
+                       
+                       
+                       
 
-                    elif self.pdf_select_param == 'get_all_pdfs_with_tags':
-                        self.selected_pdfs = files_with_selected_tags 
+                #RESET self.pdf_select_param and other attributes AFTER USAGE
+                #################
+                ##############
+                if self.pdf_select_param:
+                    if self.pdf_select_param == 'show_all_pdf_names':
+                        self._ask_all_previously_loaded_pdfs(all_pdfs)
+                       
+                    else:
+                        all_tags = RAG_CLS_INST.get_users_tags()
+
+                        if not all_tags: 
+                            st.write('You currently do not have loaded pdf assiocated with a tag yet.')
+                            st.write('Select amongst all your previously loaded PDFs:')
+                            self._ask_all_previously_loaded_pdfs(all_pdfs)
+                        
+                        else:
+                            selected_tags = self._ask_which_tags(all_tags)
+                            
+                            if self.pdf_select_param == 'show_pdf_strictly_tagged':
+                                files_with_selected_tags = RAG_CLS_INST.get_user_pdfs(tagged_with_all=selected_tags)
+                            elif self.pdf_select_param == 'show_pdf_at_least_one_tag':
+                                files_with_selected_tags = RAG_CLS_INST.get_user_pdfs(tagged_with_at_least_one=selected_tags)
+                        
+                            if files_with_selected_tags:
+                                self._ask_previously_loaded_pdfs_with_tags(files_with_selected_tags)
+                                
+                            else:
+                                st.write('You currently do not have loaded pdf assiocated with the selected tag(s).')
+                                st.write('Select amongst all your previously loaded PDFs:')
+                                self._ask_all_previously_loaded_pdfs(all_pdfs)
+                                
+                                
+                                #FILTER WITH STRICT ALL TAGS OR AT LEAST ONE OF THE TAG ? AND or OR ATTR 
+                                #THEN LET USER SELECT SOME PDFs from the filter OR ALL PDFs
+                                
+
+        
+        
+
 
 
     def _run_chatbot_callback(self):
         st.session_state.messages = []
+        st.session_state.chat_history = []
         self.run_chatbot()
         
     def _pdf_selection_parameter(self):
-        self.pdf_select_param = st.selectbox('Select a PDF selection parameter:', ['show_all_pdf_names', 'filter_pdf_with_tag', 'get_all_pdfs_with_tags'])
+        self.pdf_select_param = st.selectbox('Select a PDF selection parameter:', ['show_all_pdf_names', 'show_pdf_strictly_tagged', 'show_pdf_at_least_one_tag'], on_change=self._empty_chat_callback)
         
     def _ask_all_previously_loaded_pdfs(self, pdfs):
-        self.selected_pdfs = st.multiselect("Select -at least- one pre-existing PDF", pdfs, on_change=self._run_chatbot_callback)
+        self.selected_pdfs = st.multiselect("Select -at least- one pre-existing PDF", pdfs, on_change=self._empty_chat_callback)
     
     def _ask_which_tags(self, all_tags):
-        return st.multiselect("Select -at least- one tag", all_tags, on_change=self._run_chatbot_callback)
+        return st.multiselect("Select -at least- one tag", all_tags, on_change=self._empty_chat_callback)
 
     def _ask_previously_loaded_pdfs_with_tags(self, files_with_selected_tags):
-        self.selected_pdfs = st.multiselect("Select -at least- one pre-existing PDF (presented PDFs have all been tagged with the tags you selected)", files_with_selected_tags, on_change=self._run_chatbot_callback)
+        files_with_selected_tags.insert(0, 'SELECT ALL LISTED PDFs')
+        selected_pdfs = st.multiselect("Select -at least- one pre-existing PDF (presented PDFs have all been tagged with the tags you selected)", files_with_selected_tags, on_change=self._empty_chat_callback)
+        
+        if 'SELECT ALL LISTED PDFs' in selected_pdfs:
+            files_with_selected_tags.pop(0)
+            return files_with_selected_tags
+        else:
+            return selected_pdfs
+        
+        
         
     def _ask_pdf_input_and_tags(self):
-        tag_separator = '//'
+        name_value_sep = '::'
+        tag_sep = '//'
         
-        y_or_n = st.radio('Do you want to add a tag to your PDF ?', ['no', 'yes'], horizontal=True)
+        y_or_n = st.radio('Do you want to add a tag to your PDF ?', ['no', 'yes'], horizontal=True, on_change=self._empty_chat_callback)
         if y_or_n == 'yes':
-            tag_str = st.text_input(f"Please enter the desired tag(s) for your PDF. Format for multiple tags: 'tag1{tag_separator}tag2{tag_separator}tag3'")            
-            self.tags_pdf_input = tag_str.split(tag_separator) if tag_separator in tag_str else [tag_str]
+            st.write(f"Single tag format: 'name{name_value_sep}value'")
+            st.write(f"Multiple tags format: 'name{name_value_sep}value{tag_sep}name{name_value_sep}value{tag_sep}name{name_value_sep}value'")
+            tag_str = st.text_input(f"Please enter the desired tag(s) for your PDF.", )   
+              
+            try:       
+                list_str_tag_name_tag = tag_str.split(tag_sep) if tag_sep in tag_str else [tag_str]
+                self.tags_pdf_input = [{tag_name:tag} for str_tag_name_tag in list_str_tag_name_tag for tag_name, tag in str_tag_name_tag.split(name_value_sep)]
+            except ValueError:
+                st.write(f"Invalid tag entry. Please retry using the correct format.")
+                RESET VALUE TO NONE 
+        
 
-        self.pdf_input = st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf", on_change=self._run_chatbot_callback)
+        self.pdf_input = st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf", on_change=self._empty_chat_callback)
 
-    
 
 
 

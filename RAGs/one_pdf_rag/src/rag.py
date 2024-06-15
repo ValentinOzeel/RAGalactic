@@ -11,7 +11,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import chromadb
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters
+from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters, FilterCondition
 
 import nest_asyncio
 nest_asyncio.apply()
@@ -60,6 +60,7 @@ class RAGSinglePDF():
         
         self.user_id = None
         self.chroma_client = self._get_chromadb_client()
+        self.chroma_collection, self.vector_store, self.storage_context = None, None, None
 
         self.context_prompt = (
                 "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in mind to accomodate your responses. "
@@ -92,8 +93,10 @@ class RAGSinglePDF():
         Settings.llm = self.llm
         Settings.embed_model = self.embed_model
 
-    def _set_user_id(self, user_id):
+    def set_user_id(self, user_id):
         self.user_id = user_id 
+        # Set up database corresponding to the user_id
+        self.chroma_collection, self.vector_store, self.storage_context = self._get_chromadb_setup()
         
     def _set_engine_feature(self, engine_memory, streaming):
         self.memory, self.streaming = engine_memory, streaming
@@ -113,15 +116,15 @@ class RAGSinglePDF():
         # Create Chroma DB client and store
         return chromadb.PersistentClient(path=self.db_folder_path)
         
-    def _get_chromadb_setup(self, pdf_name):
-        target_name = '_'.join([self.user_id, pdf_name])
+    def _get_chromadb_setup(self):
+        if not self.user_id:
+            raise ValueError('User need to set self.user_id first (set_user_id(user_id) method) before to access/create the corresponding database setup.')
         # Check if the collection already exists
         collection_names = [getattr(collection_obj, 'name') for collection_obj in self.chroma_client.list_collections()]
         # Get preexisting collection or create one if does not exist yet
-        chroma_collection = self.chroma_client.get_collection(name=target_name) if target_name in collection_names else self.chroma_client.create_collection(name=target_name)
+        chroma_collection = self.chroma_client.get_collection(name=self.user_id) if self.user_id in collection_names else self.chroma_client.create_collection(name=self.user_id)
         vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        
         return chroma_collection, vector_store, storage_context 
     
     
@@ -170,22 +173,30 @@ class RAGSinglePDF():
             os.remove(temp_pdf_path)
 
 
-    def _parse_pdf(self, dir_path:str, tags:List[str]):
-        SimpleDirectoryReader()
+    def _parse_pdf(self, dir_path:str):
         return SimpleDirectoryReader(
             dir_path,
             required_exts=[".pdf"],
             filename_as_id=True,
-            file_metadata= lambda filepath: {'file_name': os.path.basename(filepath), 'tags': tags}, 
+            #file_metadata= lambda filepath: {'file_name': os.path.basename(filepath), 'tags': tags}, 
             file_extractor={".pdf": self.parser}
         ).load_data()
+        
+    def _add_metadata(self, docs, file_name:str, tags:List[Dict]=None):
+        for document in docs:
+            document.metadata["file_name"] = file_name
+            for dict_tag in tags:
+                # Single entry dict
+                tag_name = next(iter(dict_tag.keys()))
+                document.metadata[tag_name] = dict_tag[tag_name]
+        return docs
 
-    def _create_index(self, docs, storage_context):
+    def _create_index(self, docs):
         # Create VectorStoreIndex and save it with a specific document ID
-        return VectorStoreIndex.from_documents(docs, storage_context=storage_context)
+        return VectorStoreIndex.from_documents(docs, storage_context=self.storage_context)
     
  
-    def _add_new_json_data(self, file_name:str, tags:List[str]):
+    def _add_new_json_data(self, file_name:str, tags:List[Dict]=None):
         # Load existing user ids from json file, or create a new dictionary if the file does not exist
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
@@ -204,52 +215,72 @@ class RAGSinglePDF():
         with open(self.json_ids_path, 'w') as f:
             json.dump(json_data, f, indent=4)
              
-    def load_new_pdf(self, pdf_input, tags:List[str]=None):
-        _, _, storage_context = self._get_chromadb_setup(pdf_input.name)
+    def load_new_pdf(self, pdf_input, tags:List[Dict]=None):
         # Temp save the pdf
         temp_path = self._temp_save_pdf(pdf_input, dir_path=self.data_folder_path)
         # Parse pdf (temp saved in dir self.data_folder_path)
-        docs = self._parse_pdf(dir_path=self.data_folder_path, tags=tags)
+        docs = self._parse_pdf(dir_path=self.data_folder_path)
+        # Add metadata
+        docs = self._add_metadata(docs, file_name=pdf_input.name, tags=tags)
         # Create vector indexing and save it in database
-        index = self._create_index(docs, storage_context)
+        index = self._create_index(docs)
         # Add input pdf name to corresponding user ID in 
         self._add_new_json_data(file_name=pdf_input.name, tags=tags)
         # Delete temp pdf
    #     self._delete_temp_pdf(temp_path)
         # Create engine
         return self._create_corresponding_engine(index)
-
-
     
         
-
-
         
-    def get_user_pdfs(self, tagged_with:List[str]=None):
+        
+        
+    def get_user_pdfs(self, tagged_with_all:List[str]=None, tagged_with_at_least_one:List[str]=None):
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
                 json_data = json.load(f)
+                
+                if not json_data.get(self.user_id):
+                    return None
+                
                 # If there is no tag passed to the method, return all file names
-                if not tagged_with:
-                    return json_data[self.user_id]['files'] if json_data.get(self.user_id) else None  
-                # If tag is passed, zip over the file names list and the list of tag lists to retrieve every file names tagged with the tag
-                else:
-                    if json_data.get(self.user_id):
-                        files = json_data[self.user_id]['files']
-                        tags = json_data[self.user_id]['tags']
-                        # Get all file names where every tag in 'tagged_with' is present in the corresponding 'file_tags'.
-                        # - The 'zip(files, tags)' pairs each file with its associated tags.
-                        # - The 'all(tag in file_tags for tag in tagged_with)' checks if all tags in 'tagged_with' are in the current 'file_tags'
-                        return [file for file, file_tags in zip(files, tags) if all(tag in file_tags for tag in tagged_with)]
+                if not tagged_with_all and not tagged_with_at_least_one:
+                    return sorted(json_data[self.user_id]['files'])
+                
+                if json_data.get(self.user_id):
+                    files = json_data[self.user_id]['files']
+                    tags = json_data[self.user_id]['tags']
+                    # if tagged_with_all: Get all file names where every tag {tag_name:tag} in 'tagged_with_all' is present in the corresponding 'file_tags'.
+                    # if tagged_with_at_least_one: Get all file names where at least one tag {tag_name:tag} in 'tagged_with_at_least_one' is present in the corresponding 'file_tags'
+                    # - The 'zip(files, tags)' pairs each file with its associated tags.
+                    # - The 'all(tag_dict in file_tags for tag_dict in tagged_with_all)' checks if all tag dicts in 'tagged_with_all' are in the current 'file_tags' tag dict list.
+                    # - The 'any(tag_dict in file_tags for tag_dict in tagged_with_all)' checks if at least tag dict in 'tagged_with_at_least_one' are in the current 'file_tags' tag dict list.
+                    return sorted([
+                        file for file, file_tags in zip(files, tags) if all(tag_dict in file_tags for tag_dict in tagged_with_all)
+                        ]) if tagged_with_all else sorted([
+                            file for file, file_tags in zip(files, tags) if any(tag_dict in file_tags for tag_dict in tagged_with_at_least_one)
+                            ]) if tagged_with_at_least_one else None
                         
+                        
+    # Method to extract sorting metrics (key, value) from each single entry dictionary. 
+    # To be used for sorting according to key first and then value
+    def _sort_key(self, dictionnary):
+        key, value = next(iter(dictionnary.items()))
+        return (key, value)
+
+
     def get_users_tags(self):
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
                 json_data = json.load(f)
-                # Iterate over the list of tag lists 'json_data[self.user_id]['tags']' and gather all tags from each list. Then keep unique value by transforming to a set.
-                return list(set([[tag for tag_list in json_data[self.user_id]['tags'] for tag in tag_list]]))
-
-
+                # Iterate over the lists of single entry tag dict in 'json_data[self.user_id]['tags']' and gather all tag dicts from each list. Then keep unique value by transforming to a set.
+                all_tags = list(
+                    set(
+                        [tag_dict for tag_dict_list in json_data[self.user_id]['tags'] for tag_dict in tag_dict_list]
+                        )
+                    ) if (json_data[self.user_id].get('tags') and json_data[self.user_id]['tags']) else None
+                # Return list of single entry dict (list sorted by dict key first and then by dict value) or None
+                return sorted(all_tags, key=self._sort_key) if all_tags else None
 
 
         
@@ -258,12 +289,15 @@ class RAGSinglePDF():
         return VectorStoreIndex.from_vector_store(vector_store)
 
         
-    def load_existing_pdf(self, pdf_name, tags:str=None):
-        ## Load existing index for a document from database
-        _, vector_store, _ = self._get_chromadb_setup(pdf_name)
-        index = self._get_index(vector_store)
+    def load_existing_pdf(self, pdf_names):
+        ## Load existing index from database
+        index = self._get_index(self.vector_store)
+        
+        filter_list = [MetadataFilter(key="file_name", value=pdf_name) for pdf_name in pdf_names]
+        filters = MetadataFilters(filters=filter_list, condition=FilterCondition.OR)
+   
         # Create query engine
-        return self._create_corresponding_engine(index)
+        return self._create_corresponding_engine(index, filters=filters)
 
     
     
