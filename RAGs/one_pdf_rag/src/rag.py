@@ -62,30 +62,43 @@ class RAGSinglePDF():
         self.chroma_client = self._get_chromadb_client()
         self.chroma_collection, self.vector_store, self.storage_context = None, None, None
 
+#        self.context_prompt = (
+#                "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in memory to adapt your responses. "
+#                "This system enables users to upload PDFs, pose questions about their content, and receive accurate and detailed responses."
+#                "Your primary objective is to provide the highest quality assistance by leveraging your understanding of the user's queries and the information retrieved from the documents as well as of the chat history.\n\n"
+#
+#                "Your role encompasses the following responsibilities:\n"
+#                "1. **Understand User Queries**: Accurately interpret the questions or requests posed by users about their PDF documents.\n"
+#                "2. **Retrieve Relevant Information**: Utilize the document retrieval system to obtain the most pertinent information in response to the user's query.\n"
+#                "3. **Generate Accurate Responses**: Formulate clear, concise, and informative answers based on the retrieved information and the chat history.\n\n"
+#
+#                "For the current conversation, refer to the following relevant documents:\n"
+#                "{context_str}\n\n"
+#
+#                "Guidelines:\n"
+#                "1. **Content-Based Responses**: Ensure all answers are grounded in the actual content of the documents.\n"
+#                "2. **Accurate Referencing**: Accurately reference the provided documents to ensure contextual relevance.\n"
+#                "3. **Continuity and Coherence**: Integrate information from previous chat history to maintain a seamless and coherent interaction.\n"
+#                "4. **Clear and Comprehensive Answers**: Strive to deliver clear, accurate, and thorough responses to user inquiries.\n"
+#                "5. **Professional Tone**: Maintain a professional, courteous, and respectful tone throughout all interactions.\n"
+#                "6. **Expert-Level Assistance**: If the provided documents do not cover the user's query, offer general expert-level knowledge to address the question effectively.\n\n"
+#
+#                "Instruction: Utilize the preceding chat history and the context above to engage with and assist the user proficiently. Prioritize clarity, accuracy, and relevance in all responses, ensuring a seamless and informative user experience. Answer 'don't know' if you cannot provide an answer based on the provided documents."
+#            )
+
         self.context_prompt = (
-                "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in mind to accomodate your responses. "
-                "This system enables users to upload PDFs, pose questions about their content, and receive accurate and detailed responses. "
-                "Your primary objective is to provide the highest quality assistance by leveraging your understanding of the user's queries and the information retrieved from the documents as well as the chat history.\n\n"
+                              "The following is a friendly conversation between a user and an AI assistant."
+                              "The assistant is talkative and provides lots of specific details from its context."
+                              "If the assistant does not know the answer to a question, it truthfully says it does not know."
 
-                "Your role encompasses the following responsibilities:\n"
-                "1. **Understand User Queries**: Accurately interpret the questions or requests posed by users about their PDF documents.\n"
-                "2. **Retrieve Relevant Information**: Utilize the document retrieval system to obtain the most pertinent information in response to the user's query.\n"
-                "3. **Generate Accurate Responses**: Formulate clear, concise, and informative answers based on the retrieved information and the chat history.\n\n"
-
-                "For the current conversation, refer to the following relevant documents:\n"
-                "{context_str}\n\n"
-
-                "Guidelines:\n"
-                "1. **Content-Based Responses**: Ensure all answers are grounded in the actual content of the documents.\n"
-                "2. **Accurate Referencing**: Accurately reference the provided documents to ensure contextual relevance.\n"
-                "3. **Continuity and Coherence**: Integrate information from previous chat history to maintain a seamless and coherent interaction.\n"
-                "4. **Clear and Comprehensive Answers**: Strive to deliver clear, accurate, and thorough responses to user inquiries.\n"
-                "5. **Professional Tone**: Maintain a professional, courteous, and respectful tone throughout all interactions.\n"
-                "6. **Expert-Level Assistance**: If the provided documents do not cover the user's query, offer general expert-level knowledge to address the question effectively.\n\n"
-
-                "Instruction: Utilize the preceding chat history and the context above to engage with and assist the user proficiently. Prioritize clarity, accuracy, and relevance in all responses, ensuring a seamless and informative user experience."
-            )
-
+                              "Here are the relevant documents for the context:"
+                              
+                              "{context_str}"
+                            
+                              "Instruction: Based on the above documents, provide a detailed answer for the user question below."
+                              "Answer 'I do not know' if not present in the document."
+                              )
+        
 
 
     def _init_llm_and_embedd_models(self):
@@ -135,14 +148,16 @@ class RAGSinglePDF():
             return self._create_chat_engine(index, chat_mode, self.streaming, filters)
         else:
             return self._create_query_engine(index, top_k, self.streaming, filters)
+
+
         
-    def _create_chat_engine(self, index, chat_mode:str, streaming:bool, filters):
+        
+    def _create_chat_engine(self, index, chat_mode:str, streaming:bool, filters):        
         return index.as_chat_engine(chat_mode=chat_mode, 
                                     streaming=streaming,
                                     memory= ChatMemoryBuffer.from_defaults(
-                                                 token_limit=10000,
-                                                 chat_store=SimpleChatStore(),
-                                                 chat_store_key=self.user_id,
+                                                 token_limit=4000,
+                                                 chat_history=self.chat_history,
                                              ),
                                     context_prompt=self.context_prompt,
                                     filters=filters,
@@ -206,7 +221,7 @@ class RAGSinglePDF():
 
         # Create ID entry if doesnt exists
         if not json_data.get(self.user_id):
-            json_data[self.user_id] = {'files': [file_name], 'tags': tags}
+            json_data[self.user_id] = {'files': [file_name], 'tags': [tags]}
         # Add file to ID's files if file not in ID's files already
         elif file_name not in json_data[self.user_id]['files']:
             json_data[self.user_id]['files'].append(file_name)
@@ -215,6 +230,16 @@ class RAGSinglePDF():
         with open(self.json_ids_path, 'w') as f:
             json.dump(json_data, f, indent=4)
              
+    def _check_already_loaded(self, pdf_input:str):
+        if os.path.exists(self.json_ids_path):
+            with open(self.json_ids_path, 'r') as f:
+                json_data = json.load(f)
+            
+            if json_data.get(self.user_id, None):
+                return True if pdf_input.name in json_data[self.user_id]['files'] else False
+            
+        return False
+        
     def load_new_pdf(self, pdf_input, tags:List[Dict]=None):
         # Temp save the pdf
         temp_path = self._temp_save_pdf(pdf_input, dir_path=self.data_folder_path)
@@ -227,7 +252,7 @@ class RAGSinglePDF():
         # Add input pdf name to corresponding user ID in 
         self._add_new_json_data(file_name=pdf_input.name, tags=tags)
         # Delete temp pdf
-   #     self._delete_temp_pdf(temp_path)
+        self._delete_temp_pdf(temp_path)
         # Create engine
         return self._create_corresponding_engine(index)
     
@@ -273,17 +298,15 @@ class RAGSinglePDF():
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
                 json_data = json.load(f)
-                # Iterate over the lists of single entry tag dict in 'json_data[self.user_id]['tags']' and gather all tag dicts from each list. Then keep unique value by transforming to a set.
-                all_tags = list(
-                    set(
-                        [tag_dict for tag_dict_list in json_data[self.user_id]['tags'] for tag_dict in tag_dict_list]
-                        )
-                    ) if (json_data[self.user_id].get('tags') and json_data[self.user_id]['tags']) else None
+                # Extract and flatten single-entry dictionaries from the nested lists in json_data[self.user_id]['tags'] list,
+                # convert each dictionary to a tuple to ensure uniqueness with a set,
+                # and then convert the unique tuples back to single-entry dictionaries.
+                all_unique_tags = [
+                    {tag_name: tag} for tag_name, tag in set(tuple(single_entry_dict.items())[0] for tag_dict_list in json_data[self.user_id]['tags'] for single_entry_dict in tag_dict_list)
+                    ] if (json_data[self.user_id].get('tags') and json_data[self.user_id]['tags']) else None
+
                 # Return list of single entry dict (list sorted by dict key first and then by dict value) or None
-                return sorted(all_tags, key=self._sort_key) if all_tags else None
-
-
-        
+                return sorted(all_unique_tags, key=self._sort_key) if all_unique_tags else None
         
     def _get_index(self, vector_store):
         return VectorStoreIndex.from_vector_store(vector_store)
@@ -295,7 +318,9 @@ class RAGSinglePDF():
         
         filter_list = [MetadataFilter(key="file_name", value=pdf_name) for pdf_name in pdf_names]
         filters = MetadataFilters(filters=filter_list, condition=FilterCondition.OR)
-   
+        
+        logging.debug(f'FILTERRRRRRS: {filters}')
+        
         # Create query engine
         return self._create_corresponding_engine(index, filters=filters)
 
@@ -307,15 +332,11 @@ class RAGSinglePDF():
         return query_engine.query(query_text)
  
     def run_chat(self, chat_engine, prompt:str):
-        return chat_engine.stream_chat(prompt, chat_history=self.chat_history) if self.streaming else chat_engine.chat(prompt, chat_history=self.chat_history)
+        return chat_engine.stream_chat(prompt) if self.streaming else chat_engine.chat(prompt)
     
 
-    def manage_chat_history(self, create_or_reset:bool=False, equal=[], to_append:Tuple=(), get:bool=False):
+    def manage_chat_history(self, create_or_reset:bool=False, to_append:Tuple=()):
         if create_or_reset:
             self.chat_history = []
-        if equal and isinstance(to_append, List):
-            self.chat_history = equal
         if to_append and isinstance(to_append, Tuple):
             self.chat_history.append(ChatMessage(role=to_append[0], content=to_append[1])) 
-        if get:
-            return self.chat_history

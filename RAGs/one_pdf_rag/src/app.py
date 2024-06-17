@@ -54,6 +54,7 @@ class RAGPDFapp():
             'pdf_input': None,
             'pdf_filter_param': 'show_all_pdf_names',
             'selected_pdfs': None,
+            'engine': None
         }
         
         # Initialize session state parameters (messages, widget values etc...)
@@ -63,14 +64,11 @@ class RAGPDFapp():
         RAG_CLS_INST.set_user_id(self.user_id)
         
         
-        logging.debug(f'CLASS INIT')
         
-
         
-            
-
         self.ask_app_parameters()
         self.ask_input()
+        logging.debug(f'CLASS INIT: {st.session_state}')
         self.run_chatbot()
         
 
@@ -124,13 +122,13 @@ class RAGPDFapp():
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-
+                
+    def init_no_key_widget_session_state(self):
+        # Initialize as session_state key
+        for param in ['tags_str', 'tags_pdf_input', 'selected_pdfs', 'engine']:
+            self._manage_session_state(param)
 
             
-           
-           
-           
-           
             
     def ask_app_parameters(self):
         logging.debug(f'ASK PARAMS')
@@ -163,115 +161,84 @@ class RAGPDFapp():
         st.session_state.chat_history = []
 
 
-
-
-    def _ask_input_callback(self):
-        st.session_state.messages = []
-        st.session_state.chat_history = []
-        self.ask_input()
-        
-    def _reset_widget_value_and_empty_chat_callback(self, params:List=None, reset_values:List=None):
-        st.session_state.messages = []
-        st.session_state.chat_history = []
         
         
     #@st.experimental_fragment
     def ask_input(self):
         logging.debug(f'ASK INPUT')
+        
         with st.sidebar:
             if st.session_state.input_source == 'load_new_pdf':
                 self._ask_tags()
                 self._ask_pdf_input()
-    
+
             # If user already loaded pdf in the past, talk to preexiting embbedings
             elif st.session_state.input_source == 'previously_loaded_pdf':
                 all_pdfs = RAG_CLS_INST.get_user_pdfs()
-    
+
                 # If not, user needs to upload a pdf, carry out embbedings etc..
                 if not all_pdfs:
                     st.write('You currently do not have loaded any pdf yet. Please load one below:')
                     self._ask_tags()
                     self._ask_pdf_input()
-                    
+
                 # Else we can select previously loaded pdfs
                 else:
                     self._pdf_selection_parameter()
-                       
-                       
-                       
 
-                #RESET self.pdf_select_param and other attributes AFTER USAGE
-                #################
-                ##############
-                if st.session_state.pdf_filter_param:
+                if st.session_state.get('pdf_filter_param', None):
                     if st.session_state.pdf_filter_param == 'show_all_pdf_names':
-                        self._ask_all_previously_loaded_pdfs(all_pdfs)
-                       
+                        self._ask_previously_loaded_pdfs(all_pdfs)
+
                     else:
                         all_user_tags = RAG_CLS_INST.get_users_tags()
 
                         if not all_user_tags: 
                             st.write('You currently do not have loaded pdf assiocated with a tag yet.')
                             st.write('Select amongst all your previously loaded PDFs:')
-                            self._ask_all_previously_loaded_pdfs(all_pdfs)
-                        
+                            self._ask_previously_loaded_pdfs(all_pdfs)
+
                         else:
                             self._ask_which_tags(all_user_tags)
-                            
+
                             if st.session_state.pdf_filter_param == 'show_pdf_strictly_tagged':
                                 files_with_selected_tags = RAG_CLS_INST.get_user_pdfs(tagged_with_all=st.session_state.selected_tags)
                             elif st.session_state.pdf_filter_param == 'show_pdf_at_least_one_tag':
                                 files_with_selected_tags = RAG_CLS_INST.get_user_pdfs(tagged_with_at_least_one=st.session_state.selected_tags)
-                        
+
                             if files_with_selected_tags:
-                                self._ask_previously_loaded_pdfs_with_tags(files_with_selected_tags)
-                                
+                                self._ask_previously_loaded_pdfs(files_with_selected_tags, tagged=True)
+
                             else:
                                 st.write('You currently do not have loaded pdf assiocated with the selected tag(s).')
                                 st.write('Select amongst all your previously loaded PDFs:')
-                                self._ask_all_previously_loaded_pdfs(all_pdfs)
+                                self._ask_previously_loaded_pdfs(all_pdfs)
                                 
-                                
-                                #FILTER WITH STRICT ALL TAGS OR AT LEAST ONE OF THE TAG ? AND or OR ATTR 
-                                #THEN LET USER SELECT SOME PDFs from the filter OR ALL PDFs
-                                
-
-        
         
 
-
-
-    def _run_chatbot_callback(self):
-        st.session_state.messages = []
-        st.session_state.chat_history = []
-        self.run_chatbot()
-        
     def _pdf_selection_parameter(self):
         st.selectbox('Select a PDF selection parameter:', ['show_all_pdf_names', 'show_pdf_strictly_tagged', 'show_pdf_at_least_one_tag'], 
                      key='pdf_filter_param',
                      on_change=self._empty_chat_callback)
-        
-    def _ask_all_previously_loaded_pdfs(self, pdfs):
-        st.multiselect("Select -at least- one pre-existing PDF", pdfs, 
-                        key='selected_pdfs',
-                        on_change=self._empty_chat_callback)
     
     def _ask_which_tags(self, all_tags):
         st.multiselect("Select -at least- one tag", all_tags, 
                        key='selected_tags',
                        on_change=self._empty_chat_callback)
+        
+    def _ask_previously_loaded_pdfs(self, pdf_choices, tagged=False):
+        pdf_choices.insert(0, 'SELECT ALL LISTED PDFs')
+        
+        widget_text = "Select -at least- one pre-loaded PDF (PDFs shown have been tagged with selected tag(s))" if tagged else "Select -at least- one pre-loaded PDF"
 
-    def _ask_previously_loaded_pdfs(self, files_with_selected_tags):
-        files_with_selected_tags.insert(0, 'SELECT ALL LISTED PDFs')
-        selected_pdfs = st.multiselect("Select -at least- one pre-existing PDF (presented PDFs have all been tagged with the tags you selected)", files_with_selected_tags, 
-                                       key='selected_pdfs',
+        selected_pdfs = st.multiselect(widget_text, pdf_choices, 
                                        on_change=self._empty_chat_callback)
         
         if 'SELECT ALL LISTED PDFs' in selected_pdfs:
-            files_with_selected_tags.pop(0)
-            return files_with_selected_tags
+            pdf_choices.pop(0)
+            st.session_state.selected_pdfs = pdf_choices
         else:
-            return selected_pdfs
+            st.session_state.selected_pdfs = selected_pdfs
         
         
         
@@ -286,26 +253,23 @@ class RAGPDFapp():
         if st.session_state.add_tags:
             st.write(f"Single tag format: 'name{name_value_sep}value'")
             st.write(f"Multiple tags format: 'name{name_value_sep}value{tag_sep}name{name_value_sep}value{tag_sep}name{name_value_sep}value'")
-            
-            st.text_input(f"Please enter the desired tag(s) for your PDF.", 
-                          key='tags_str')   
+            st.session_state.tags_str = st.text_input(f"Please enter the desired tag(s) for your PDF.")   
               
-            try:       
-                list_str_tag_name_tag = st.session_state.tags_str.split(tag_sep) if tag_sep in st.session_state.tags_str else [st.session_state.tags_str]
-
-
-                st.session_state.tags_pdf_input = [{name: tag} for str_tag_name_tag in list_str_tag_name_tag for name, tag in [str_tag_name_tag.split(name_value_sep)]]
-
-                placeholder = st.empty()
-                placeholder.text(f'Tags: {st.session_state.tags_pdf_input}')
-                #placeholder.empty() 
+            try: 
+                if st.session_state.tags_str:
+                    # Split if multiple tags      
+                    list_str_tag_name_tag = st.session_state.tags_str.split(tag_sep) if tag_sep in st.session_state.tags_str else [st.session_state.tags_str]
+                    # Split tag_name / tag_value
+                    st.session_state.tags_pdf_input = [{name: tag} for str_tag_name_tag in list_str_tag_name_tag for name, tag in [str_tag_name_tag.split(name_value_sep)]]
+                    # Show provided tags
+                    placeholder = st.empty()
+                    placeholder.text(f'Tags: {st.session_state.tags_pdf_input}')
+                    #placeholder.empty() 
             
             except ValueError:
                 alert = st.warning("Invalid tag entry. Please retry using the correct format.")
                 time.sleep(10)
-                alert.empty() # Clear the alert
-
-
+                alert.empty() 
 
     def _ask_pdf_input(self):
         st.file_uploader("Please upload your PDF file (file name, including extention, should be <= 42 caracters)", type="pdf", 
@@ -323,36 +287,45 @@ class RAGPDFapp():
             self.previously_loaded_pdf()      
             
     def load_new_pdf(self):
-        if st.session_state.pdf_input:
+        if st.session_state.pdf_input and not RAG_CLS_INST._check_already_loaded(st.session_state.pdf_input):
             # Validate pdf input through pydantic
-            validate_pdf_input(self.pdf_input)
+            validate_pdf_input(st.session_state.pdf_input)
             engine = RAG_CLS_INST.load_new_pdf(st.session_state.pdf_input, tags=st.session_state.tags_pdf_input)
-            self.reset_attributes(['pdf_input', 'tags_pdf_input'])
+            for session_attr in ['tags_str', 'tags_pdf_input']:
+                self._manage_session_state(session_attr, reset=True)     
             self._chat_with_pdf(engine)
+        elif st.session_state.pdf_input and RAG_CLS_INST._check_already_loaded(st.session_state.pdf_input):
+            self.previously_loaded_pdf(files=[st.session_state.pdf_input])
     
-    def previously_loaded_pdf(self):
+    def previously_loaded_pdf(self, files=None):
         logging.debug(f'PREVIOUSLY LOADED PDF FOR CHAT')
-        if st.session_state.selected_pdfs:
+        
+        if files: 
+            engine = RAG_CLS_INST.load_existing_pdf(files) 
+            self._chat_with_pdf(engine)
+            
+        elif st.session_state.get('selected_pdfs', None):
             engine = RAG_CLS_INST.load_existing_pdf(st.session_state.selected_pdfs)   
-            self.reset_attributes(['selected_pdfs'])  
+            #self._manage_session_state('selected_pdfs', reset=True) 
             self._chat_with_pdf(engine)
         
     def _chat_with_pdf(self, engine):
         logging.debug(f'HISTORY: {RAG_CLS_INST.chat_history}')
         if prompt := st.chat_input("You can now start chatting with your PDF."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.messages.append({"role": "user", "content": prompt}) 
             
             with st.chat_message("user"):
                 st.markdown(prompt)
-                
+
             with st.chat_message("assistant"):
                 if prompt:
                     rag_response = RAG_CLS_INST.run_chat(engine, prompt) if st.session_state.memory else RAG_CLS_INST.run_query(engine, prompt)
                     response = st.write_stream(rag_response.response_gen) if st.session_state.streaming else st.markdown(rag_response.response)
-                    
+            
+            st.session_state.messages.append({"role": "assistant", "content": response})
             self._add_to_chat_history('user', str(prompt))
             self._add_to_chat_history('system', str(rag_response.response))
-            st.session_state.messages.append({"role": "assistant", "content": response})
+
 
     def _add_to_chat_history(self, who:str, message:str):
         st.session_state.chat_history.append(ChatMessage(role=who, content=message))
