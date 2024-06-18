@@ -45,7 +45,8 @@ class RAGPDFapp():
         self.param_reset_values = {
             'messages': [],
             'chat_history': [],
-            'memory': True,
+            'llm_mode': 'Conversation',
+            'llm_external_knowledge': False,
             'streaming': True,
             'input_source': 'load_new_pdf',
             'add_tags': False,
@@ -137,13 +138,18 @@ class RAGPDFapp():
             self._ask_new_or_previously_loaded()
 
     def _ask_engine_features(self):
-        st.radio("LLM memory:", (False, True), 
-                 key='memory', horizontal=True, 
+        st.radio("LLM mode:", ('Questions', 'Conversation'), 
+                 key='llm_mode', horizontal=True, 
                  on_change=self._empty_chat_and_set_engine_features_callback)
+
+        st.radio("LLM external knowledge:", (False, True), 
+                 key='llm_external_knowledge', horizontal=True, 
+                 on_change=self._empty_chat_and_set_engine_features_callback)   
         
         st.radio("LLM response streaming:", (False, True), 
                  key='streaming',  horizontal=True,
                  on_change=self._empty_chat_and_set_engine_features_callback)
+        
            
     def _ask_new_or_previously_loaded(self):
         # Option to select input source
@@ -154,11 +160,12 @@ class RAGPDFapp():
     def _empty_chat_and_set_engine_features_callback(self):
         self._manage_session_state('messages', reset=True)
         self._manage_session_state('chat_history', reset=True)
-        RAG_CLS_INST._set_engine_feature(st.session_state.memory, st.session_state.streaming)
+        RAG_CLS_INST._set_engine_feature(st.session_state.llm_mode, st.session_state.llm_external_knowledge, st.session_state.streaming)
     
     def _empty_chat_callback(self):
         st.session_state.messages = []
         st.session_state.chat_history = []
+        RAG_CLS_INST.manage_chat_history(create_or_reset=True)
 
 
         
@@ -319,12 +326,12 @@ class RAGPDFapp():
 
             with st.chat_message("assistant"):
                 if prompt:
-                    rag_response = RAG_CLS_INST.run_chat(engine, prompt) if st.session_state.memory else RAG_CLS_INST.run_query(engine, prompt)
+                    rag_response = RAG_CLS_INST.run_chat(engine, prompt) if st.session_state.llm_mode == 'Conversation' else RAG_CLS_INST.run_query(engine, prompt)
                     response = st.write_stream(rag_response.response_gen) if st.session_state.streaming else st.markdown(rag_response.response)
             
             st.session_state.messages.append({"role": "assistant", "content": response})
             self._add_to_chat_history('user', str(prompt))
-            self._add_to_chat_history('system', str(rag_response.response))
+            self._add_to_chat_history('system', str(rag_response))
 
 
     def _add_to_chat_history(self, who:str, message:str):

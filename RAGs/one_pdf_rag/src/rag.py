@@ -1,17 +1,27 @@
 # Import modules
 import os
 import json
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
-from llama_index.core.memory import ChatMemoryBuffer
-from llama_index.core.storage.chat_store import SimpleChatStore
-from llama_index.core.llms import ChatMessage
-from llama_parse import LlamaParse
+
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
+from llama_parse import LlamaParse
+from llama_index.core.extractors import (TitleExtractor, QuestionsAnsweredExtractor, SummaryExtractor, 
+                                         QuestionsAnsweredExtractor, TitleExtractor, KeywordExtractor)
+from llama_index.extractors.entity import EntityExtractor
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.core.llms import ChatMessage
+
 import chromadb
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters, FilterCondition
+
+from prompt import PROMPT_NO_EXTERNAL_KNOWLEDGE, PROMPT_WITH_EXTERNAL_KNOWLEDGE
+
+import torch
 
 import nest_asyncio
 nest_asyncio.apply()
@@ -33,10 +43,6 @@ import logging
 
 
 
-
-
-
-
 class RAGSinglePDF():
     def __init__(self):
         
@@ -50,54 +56,31 @@ class RAGSinglePDF():
         self.json_ids_path = os.path.join(self.data_folder_path, 'json_ids.json')
         self.app_credentials_path = os.path.join(self.project_root, 'app_credentials', 'app_credentials.yaml')
 
-        self.llm = Ollama(model="llama3", request_timeout=200.0)
-        self.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.llm = Ollama(model="llama3", request_timeout=200.0, )
+        self.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device=self.device)
         self._init_llm_and_embedd_models()
         
         self.parser = self._get_parser()
-        self.memory, self.streaming = None, None
+        self.llm_mode, self.streaming = None, None
         self.chat_history = []
         
         self.user_id = None
         self.chroma_client = self._get_chromadb_client()
         self.chroma_collection, self.vector_store, self.storage_context = None, None, None
 
-#        self.context_prompt = (
-#                "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in memory to adapt your responses. "
-#                "This system enables users to upload PDFs, pose questions about their content, and receive accurate and detailed responses."
-#                "Your primary objective is to provide the highest quality assistance by leveraging your understanding of the user's queries and the information retrieved from the documents as well as of the chat history.\n\n"
-#
-#                "Your role encompasses the following responsibilities:\n"
-#                "1. **Understand User Queries**: Accurately interpret the questions or requests posed by users about their PDF documents.\n"
-#                "2. **Retrieve Relevant Information**: Utilize the document retrieval system to obtain the most pertinent information in response to the user's query.\n"
-#                "3. **Generate Accurate Responses**: Formulate clear, concise, and informative answers based on the retrieved information and the chat history.\n\n"
-#
-#                "For the current conversation, refer to the following relevant documents:\n"
-#                "{context_str}\n\n"
-#
-#                "Guidelines:\n"
-#                "1. **Content-Based Responses**: Ensure all answers are grounded in the actual content of the documents.\n"
-#                "2. **Accurate Referencing**: Accurately reference the provided documents to ensure contextual relevance.\n"
-#                "3. **Continuity and Coherence**: Integrate information from previous chat history to maintain a seamless and coherent interaction.\n"
-#                "4. **Clear and Comprehensive Answers**: Strive to deliver clear, accurate, and thorough responses to user inquiries.\n"
-#                "5. **Professional Tone**: Maintain a professional, courteous, and respectful tone throughout all interactions.\n"
-#                "6. **Expert-Level Assistance**: If the provided documents do not cover the user's query, offer general expert-level knowledge to address the question effectively.\n\n"
-#
-#                "Instruction: Utilize the preceding chat history and the context above to engage with and assist the user proficiently. Prioritize clarity, accuracy, and relevance in all responses, ensuring a seamless and informative user experience. Answer 'don't know' if you cannot provide an answer based on the provided documents."
-#            )
+        self.llamaindex_api_level = 'high' # 'low'  # Value is either 'high' or 'low'
+        self.low_level_api_params = {
+            'nodes_splitter': SentenceSplitter(separator=" ", chunk_size=1024, chunk_overlap=128),
+            'nodes_summary_extractor': SummaryExtractor(summaries=["prev", "self", "next"]), # automatically extracts a summary over a set of Nodes
+            'nodes_question_answered_extractor': QuestionsAnsweredExtractor(questions=3), # extracts a set of questions that each Node can answer
+            'nodes_title_extractor': TitleExtractor(nodes=5), # extracts a title over the context of each Node
+            'nodes_entity_extractor': EntityExtractor(device=self.device), # - extracts entities (i.e. names of places, people, things) mentioned in the content of each Node
+            'nodes_keyword_extractor': KeywordExtractor()
+        }
 
-        self.context_prompt = (
-                              "The following is a friendly conversation between a user and an AI assistant."
-                              "The assistant is talkative and provides lots of specific details from its context."
-                              "If the assistant does not know the answer to a question, it truthfully says it does not know."
-
-                              "Here are the relevant documents for the context:"
-                              
-                              "{context_str}"
-                            
-                              "Instruction: Based on the above documents, provide a detailed answer for the user question below."
-                              "Answer 'I do not know' if not present in the document."
-                              )
+        self.context_prompt = None
         
 
 
@@ -111,9 +94,10 @@ class RAGSinglePDF():
         # Set up database corresponding to the user_id
         self.chroma_collection, self.vector_store, self.storage_context = self._get_chromadb_setup()
         
-    def _set_engine_feature(self, engine_memory, streaming):
-        self.memory, self.streaming = engine_memory, streaming
-        if self.memory:
+    def _set_engine_feature(self, engine_mode, llm_external_knowledge, streaming):
+        self.llm_mode, self.streaming = engine_mode, streaming
+        self.context_prompt = PROMPT_WITH_EXTERNAL_KNOWLEDGE if llm_external_knowledge else PROMPT_NO_EXTERNAL_KNOWLEDGE
+        if self.llm_mode == 'Conversation':
             self.manage_chat_history(create_or_reset=True)
         
     def _get_parser(self):
@@ -139,41 +123,12 @@ class RAGSinglePDF():
         vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         return chroma_collection, vector_store, storage_context 
-    
-    
-    
-
-    def _create_corresponding_engine(self, index, top_k=10, chat_mode='condense_plus_context', filters=None):
-        if self.memory:
-            return self._create_chat_engine(index, chat_mode, self.streaming, filters)
-        else:
-            return self._create_query_engine(index, top_k, self.streaming, filters)
-
-
-        
-        
-    def _create_chat_engine(self, index, chat_mode:str, streaming:bool, filters):        
-        return index.as_chat_engine(chat_mode=chat_mode, 
-                                    streaming=streaming,
-                                    memory= ChatMemoryBuffer.from_defaults(
-                                                 token_limit=4000,
-                                                 chat_history=self.chat_history,
-                                             ),
-                                    context_prompt=self.context_prompt,
-                                    filters=filters,
-                                    verbose=False,                            
-                                    )
-                
-    def _create_query_engine(self, index, top_k:int, streaming:bool, filters):
-        return index.as_query_engine(similarity_top_k=top_k, streaming=streaming, filters=filters)
-    
 
 
 
-
-
- 
-
+    ###               ###
+    ### LOAD NEW PDFS ###
+    ###               ###
 
     def _temp_save_pdf(self, pdf_input, dir_path:str):
         # Save the uploaded PDF file temporarily
@@ -206,11 +161,31 @@ class RAGSinglePDF():
                 document.metadata[tag_name] = dict_tag[tag_name]
         return docs
 
+    def _create_nodes_and_save_in_vector_store(self, docs):
+        pipeline = IngestionPipeline(
+            transformations=[
+                self.low_level_api_params['nodes_splitter'],
+                self.low_level_api_params['nodes_summary_extractor'],
+                self.low_level_api_params['nodes_question_answered_extractor'],
+                self.low_level_api_params['nodes_title_extractor'],
+                self.low_level_api_params['nodes_entity_extractor'],
+                self.low_level_api_params['nodes_keyword_extractor'],
+                self.embed_model,
+            ],
+            vector_store=self.vector_store,
+        )
+        # Ingest directly into a vector db
+        pipeline.run(documents=docs)  
+        
     def _create_index(self, docs):
-        # Create VectorStoreIndex and save it with a specific document ID
-        return VectorStoreIndex.from_documents(docs, storage_context=self.storage_context)
-    
- 
+        if self.llamaindex_api_level == 'high':
+            # Create VectorStoreIndex and save it with a specific document ID
+            return VectorStoreIndex.from_documents(docs, storage_context=self.storage_context)
+        
+        elif self.llamaindex_api_level == 'low':
+            self._create_nodes_and_save_in_vector_store(docs)  
+            return VectorStoreIndex.from_vector_store(self.vector_store)
+
     def _add_new_json_data(self, file_name:str, tags:List[Dict]=None):
         # Load existing user ids from json file, or create a new dictionary if the file does not exist
         if os.path.exists(self.json_ids_path):
@@ -260,6 +235,10 @@ class RAGSinglePDF():
         
         
         
+    ###                        ###
+    ### PREVIOUSLY LOADED PDFS ###
+    ###                        ###
+    
     def get_user_pdfs(self, tagged_with_all:List[str]=None, tagged_with_at_least_one:List[str]=None):
         if os.path.exists(self.json_ids_path):
             with open(self.json_ids_path, 'r') as f:
@@ -311,7 +290,6 @@ class RAGSinglePDF():
     def _get_index(self, vector_store):
         return VectorStoreIndex.from_vector_store(vector_store)
 
-        
     def load_existing_pdf(self, pdf_names):
         ## Load existing index from database
         index = self._get_index(self.vector_store)
@@ -325,7 +303,38 @@ class RAGSinglePDF():
         return self._create_corresponding_engine(index, filters=filters)
 
     
-    
+
+
+
+
+
+
+
+    ###                    ###
+    ### GET CHATBOT ENGINE ###
+    ###                    ###
+
+    def _create_corresponding_engine(self, index, top_k:int=3, chat_mode='condense_plus_context', filters=None):
+        if self.llm_mode == 'Conversation':
+            return self._create_chat_engine(index, chat_mode, top_k, self.streaming, filters)
+        else:
+            return self._create_query_engine(index, top_k, self.streaming, filters)
+
+    def _create_chat_engine(self, index, chat_mode:str, top_k, streaming:bool,  filters):        
+        return index.as_chat_engine(chat_mode=chat_mode, 
+                                    streaming=streaming,
+                                    memory= ChatMemoryBuffer.from_defaults(
+                                                 token_limit=10000,
+                                                 chat_history=self.chat_history,
+                                             ),
+                                    context_prompt=self.context_prompt,
+                                    similarity_top_k=top_k,
+                                    filters=filters,
+                                    verbose=False,                            
+                                    )
+                
+    def _create_query_engine(self, index, top_k:int, streaming:bool, filters):
+        return index.as_query_engine(similarity_top_k=top_k, streaming=streaming, filters=filters)
     
         
     def run_query(self, query_engine, query_text:str):
