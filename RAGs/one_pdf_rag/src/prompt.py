@@ -1,4 +1,4 @@
-PROMPT_NO_EXTERNAL_KNOWLEDGE = (
+PROMPT_NO_KNOWLEDGE_BASE = (
         "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in memory to adapt your responses. "
         "This system enables users to upload PDFs, pose questions about their content, and receive accurate and detailed responses."
         "Your primary objective is to provide the highest quality assistance by leveraging your understanding of the user's queries and the information retrieved from the documents as well as of the chat history without using your pre-existing knowledge base.\n\n"
@@ -25,7 +25,7 @@ PROMPT_NO_EXTERNAL_KNOWLEDGE = (
     )
 
 
-PROMPT_WITH_EXTERNAL_KNOWLEDGE = (
+PROMPT_WITH_KNOWLEDGE_BASE = (
         "You are a sophisticated AI assistant integrated into a Retrieval-Augmented Generation (RAG) system, designed to facilitate interactive and insightful engagements with users regarding their PDF documents while keeping the chat history in memory to adapt your responses. "
         "This system enables users to upload PDFs, pose questions about their content, and receive accurate and detailed responses."
         "Your primary objective is to provide the highest quality assistance by leveraging your understanding of the user's queries and the information retrieved from the documents as well as of the chat history and your preexisting knowledge.\n\n"
@@ -48,3 +48,45 @@ PROMPT_WITH_EXTERNAL_KNOWLEDGE = (
         
         "Instruction: Utilize the preceding chat history, the context above and your pre-existing knowledge base to engage with and assist the user proficiently. Prioritize clarity, accuracy, and relevance in all responses, ensuring a seamless and informative user experience."
     )
+
+
+
+
+
+
+
+
+text_qa_template_str = (
+    "Context information is"
+    " below.\n---------------------\n{context_str}\n---------------------\nUsing"
+    " both the context information and your own knowledge base, answer"
+    " the question: {query_str}\nIf the context isn't helpful, you can also"
+    " answer the question on your own, based on your knowledge base.\n"
+)
+
+refine_template_str = (
+    "The original question is as follows: {query_str}\nWe have provided an"
+    " existing answer: {existing_answer}\nWe have the opportunity to refine"
+    " the existing answer (only if needed) with some more context"
+    " below.\n------------\n{context_msg}\n------------\nUsing both the new"
+    " context and your own knowledge base, update or repeat the existing answer.\n"
+)
+
+
+
+text_qa_template_str_no_knowledge_base = (
+    "Context information is"
+    " below.\n---------------------\n{context_str}\n---------------------\nSolely using"
+    " the context information, answer"
+    " the question: {query_str}\nIf the context isn't helpful, just say 'Based on the provided documents, I do not know.'"
+    " as you are not allowed to use your knowledge base to provide an answer.\n"
+)
+
+
+refine_template_str_no_knowledge_base = (
+    "The original question is as follows: {query_str}\nWe have provided an"
+    " existing answer: {existing_answer}\nWe have the opportunity to refine"
+    " the existing answer (only if needed) with some more context"
+    " below, but you are not allowed to use your knowledge base.\n------------\n{context_msg}\n------------\nUsing the new"
+    " context, update or repeat the existing answer without using your knowledge base.\n"
+)

@@ -13,25 +13,24 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.llms import ChatMessage
+from llama_index.core import PromptTemplate
 
 import chromadb
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters, FilterCondition
 
-from prompt import PROMPT_NO_EXTERNAL_KNOWLEDGE, PROMPT_WITH_EXTERNAL_KNOWLEDGE
+from prompt import (PROMPT_NO_KNOWLEDGE_BASE, PROMPT_WITH_KNOWLEDGE_BASE,
+                    text_qa_template_str, refine_template_str,
+                    text_qa_template_str_no_knowledge_base, refine_template_str_no_knowledge_base)
+
 
 import torch
 
 import nest_asyncio
 nest_asyncio.apply()
 
-
 from typing import Dict, Tuple, List
-
-# EVALUATE RAG 
-
-
 
 import logging
 #logging.basicConfig(level=logging.DEBUG)
@@ -41,9 +40,7 @@ import logging
 #logging.error('This is an error message')
 #logging.critical('This is a critical message')
 
-
-
-class RAGSinglePDF():
+class RAGalacticPDF():
     def __init__(self):
         
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -70,19 +67,26 @@ class RAGSinglePDF():
         self.chroma_client = self._get_chromadb_client()
         self.chroma_collection, self.vector_store, self.storage_context = None, None, None
 
-        self.llamaindex_api_level = 'high' # 'low'  # Value is either 'high' or 'low'
-        self.low_level_api_params = {
-            'nodes_splitter': SentenceSplitter(separator=" ", chunk_size=1024, chunk_overlap=128),
-            'nodes_summary_extractor': SummaryExtractor(summaries=["prev", "self", "next"]), # automatically extracts a summary over a set of Nodes
-            'nodes_question_answered_extractor': QuestionsAnsweredExtractor(questions=3), # extracts a set of questions that each Node can answer
-            'nodes_title_extractor': TitleExtractor(nodes=5), # extracts a title over the context of each Node
-            'nodes_entity_extractor': EntityExtractor(device=self.device), # - extracts entities (i.e. names of places, people, things) mentioned in the content of each Node
-            'nodes_keyword_extractor': KeywordExtractor()
-        }
-
-        self.context_prompt = None
+        self.use_custom_transforms = False
         
-
+        self.custom_transforms = [
+                SentenceSplitter(separator=" ", chunk_size=1024, chunk_overlap=128),
+                SummaryExtractor(summaries=["prev", "self", "next"]), # automatically extracts a summary over a set of Nodes
+                QuestionsAnsweredExtractor(questions=3), # extracts a set of questions that each Node can answer
+                TitleExtractor(nodes=5), # extracts a title over the context of each Node
+                EntityExtractor(device=self.device), # - extracts entities (i.e. names of places, people, things) mentioned in the content of each Node
+                KeywordExtractor(),
+                self.embed_model,
+            ]
+        
+        # Context prompt for chat engine
+        self.context_prompt = None
+        # Context prompt for query engine
+        self.text_qa_template = None
+        self.refine_template = None
+        # Engine parameters
+        self.similarity_top_k=3 
+        self.chat_mode='condense_plus_context'
 
     def _init_llm_and_embedd_models(self):
         # Initialize llm and ServiceContext
@@ -94,9 +98,17 @@ class RAGSinglePDF():
         # Set up database corresponding to the user_id
         self.chroma_collection, self.vector_store, self.storage_context = self._get_chromadb_setup()
         
-    def _set_engine_feature(self, engine_mode, llm_external_knowledge, streaming):
+    def _set_engine_feature(self, engine_mode, llm_knowledge_base, streaming):
         self.llm_mode, self.streaming = engine_mode, streaming
-        self.context_prompt = PROMPT_WITH_EXTERNAL_KNOWLEDGE if llm_external_knowledge else PROMPT_NO_EXTERNAL_KNOWLEDGE
+        if llm_knowledge_base:
+            self.context_prompt = PROMPT_WITH_KNOWLEDGE_BASE
+            self.text_qa_template = PromptTemplate(text_qa_template_str)
+            self.refine_template = PromptTemplate(refine_template_str)
+        else:
+            self.context_prompt = PROMPT_NO_KNOWLEDGE_BASE
+            self.text_qa_template = PromptTemplate(text_qa_template_str_no_knowledge_base)
+            self.refine_template = PromptTemplate(refine_template_str_no_knowledge_base)
+        
         if self.llm_mode == 'Conversation':
             self.manage_chat_history(create_or_reset=True)
         
@@ -161,30 +173,18 @@ class RAGSinglePDF():
                 document.metadata[tag_name] = dict_tag[tag_name]
         return docs
 
-    def _create_nodes_and_save_in_vector_store(self, docs):
+    def _create_nodes(self, docs):
         pipeline = IngestionPipeline(
-            transformations=[
-                self.low_level_api_params['nodes_splitter'],
-                self.low_level_api_params['nodes_summary_extractor'],
-                self.low_level_api_params['nodes_question_answered_extractor'],
-                self.low_level_api_params['nodes_title_extractor'],
-                self.low_level_api_params['nodes_entity_extractor'],
-                self.low_level_api_params['nodes_keyword_extractor'],
-                self.embed_model,
-            ],
-            vector_store=self.vector_store,
+            transformations=self.custom_transforms,
         )
-        # Ingest directly into a vector db
-        pipeline.run(documents=docs)  
+        return pipeline.run(documents=docs)  
         
     def _create_index(self, docs):
-        if self.llamaindex_api_level == 'high':
-            # Create VectorStoreIndex and save it with a specific document ID
+        if not self.use_custom_transforms:
             return VectorStoreIndex.from_documents(docs, storage_context=self.storage_context)
+        else:
+            return VectorStoreIndex(nodes=self._create_nodes(docs), storage_context=self.storage_context)
         
-        elif self.llamaindex_api_level == 'low':
-            self._create_nodes_and_save_in_vector_store(docs)  
-            return VectorStoreIndex.from_vector_store(self.vector_store)
 
     def _add_new_json_data(self, file_name:str, tags:List[Dict]=None):
         # Load existing user ids from json file, or create a new dictionary if the file does not exist
@@ -212,10 +212,13 @@ class RAGSinglePDF():
             
             if json_data.get(self.user_id, None):
                 return True if pdf_input.name in json_data[self.user_id]['files'] else False
-            
-        return False
+            else:
+                return False
         
     def load_new_pdf(self, pdf_input, tags:List[Dict]=None):
+        # If already loaded previously, then use pre-loaded
+        if self._check_already_loaded(pdf_input):
+            return self.load_existing_pdf([pdf_input.name])
         # Temp save the pdf
         temp_path = self._temp_save_pdf(pdf_input, dir_path=self.data_folder_path)
         # Parse pdf (temp saved in dir self.data_folder_path)
@@ -224,13 +227,13 @@ class RAGSinglePDF():
         docs = self._add_metadata(docs, file_name=pdf_input.name, tags=tags)
         # Create vector indexing and save it in database
         index = self._create_index(docs)
-        # Add input pdf name to corresponding user ID in 
-        self._add_new_json_data(file_name=pdf_input.name, tags=tags)
         # Delete temp pdf
         self._delete_temp_pdf(temp_path)
+        # Add input pdf name to corresponding user ID in 
+        self._add_new_json_data(file_name=pdf_input.name, tags=tags)
         # Create engine
         return self._create_corresponding_engine(index)
-    
+
         
         
         
@@ -307,35 +310,36 @@ class RAGSinglePDF():
 
 
 
-
-
-
     ###                    ###
     ### GET CHATBOT ENGINE ###
     ###                    ###
 
-    def _create_corresponding_engine(self, index, top_k:int=3, chat_mode='condense_plus_context', filters=None):
+    def _create_corresponding_engine(self, index, filters=None):
         if self.llm_mode == 'Conversation':
-            return self._create_chat_engine(index, chat_mode, top_k, self.streaming, filters)
+            return self._create_chat_engine(index, filters)
         else:
-            return self._create_query_engine(index, top_k, self.streaming, filters)
+            return self._create_query_engine(index, filters)
 
-    def _create_chat_engine(self, index, chat_mode:str, top_k, streaming:bool,  filters):        
-        return index.as_chat_engine(chat_mode=chat_mode, 
-                                    streaming=streaming,
+    def _create_chat_engine(self, index, filters):    
+        return index.as_chat_engine(chat_mode=self.chat_mode, 
+                                    streaming=self.streaming,
                                     memory= ChatMemoryBuffer.from_defaults(
                                                  token_limit=10000,
                                                  chat_history=self.chat_history,
                                              ),
                                     context_prompt=self.context_prompt,
-                                    similarity_top_k=top_k,
+                                    # Retriever params
+                                    similarity_top_k=self.similarity_top_k,
                                     filters=filters,
                                     verbose=False,                            
                                     )
-                
-    def _create_query_engine(self, index, top_k:int, streaming:bool, filters):
-        return index.as_query_engine(similarity_top_k=top_k, streaming=streaming, filters=filters)
-    
+            
+    def _create_query_engine(self, index, filters):
+        return index.as_query_engine(similarity_top_k=self.similarity_top_k, 
+                                     text_qa_template=self.text_qa_template, refine_template=self.refine_template,
+                                     streaming=self.streaming, 
+                                     filters=filters
+                                     )
         
     def run_query(self, query_engine, query_text:str):
         return query_engine.query(query_text)

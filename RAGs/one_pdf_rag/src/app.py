@@ -7,7 +7,7 @@ import time
 import streamlit as st
 from streamlit_cookies_manager import EncryptedCookieManager
 from pydantic_valids import validate_pdf_input
-from rag import RAGSinglePDF
+from rag import RAGalacticPDF
 
 from typing import List, Dict, Tuple
 import logging
@@ -20,7 +20,7 @@ from llama_index.core.llms import ChatMessage
 
 
 # Create instance of RAGSinglePDF class
-RAG_CLS_INST = RAGSinglePDF()
+RAG_CLS_INST = RAGalacticPDF()
 
 
 class RAGPDFapp():
@@ -46,7 +46,7 @@ class RAGPDFapp():
             'messages': [],
             'chat_history': [],
             'llm_mode': 'Conversation',
-            'llm_external_knowledge': False,
+            'llm_knowledge_base': False,
             'streaming': True,
             'input_source': 'load_new_pdf',
             'add_tags': False,
@@ -55,7 +55,6 @@ class RAGPDFapp():
             'pdf_input': None,
             'pdf_filter_param': 'show_all_pdf_names',
             'selected_pdfs': None,
-            'engine': None
         }
         
         # Initialize session state parameters (messages, widget values etc...)
@@ -65,14 +64,21 @@ class RAGPDFapp():
         RAG_CLS_INST.set_user_id(self.user_id)
         
         
-        
-        
+        ###                    ###
+        ###       RUN APP      ###
+        ###                    ###
         self.ask_app_parameters()
         self.ask_input()
         logging.debug(f'CLASS INIT: {st.session_state}')
         self.run_chatbot()
         
 
+
+
+
+        ###                    ###
+        ###  INIT USER PARAMS  ###
+        ###                    ###
     def _get_cookie_manager_secret_key(self):
         root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         cred_path = os.path.join(root, 'app_credentials', 'app_credentials.yaml')
@@ -115,22 +121,19 @@ class RAGPDFapp():
                 st.session_state[key] = self.param_reset_values[key]    
     
     def init_session_state_parameters(self):
-        # Initialize as session_state key
-        for param in ['messages', 'chat_history']:
+        # Initialize as session_state key if does not exists already
+        for param in ['messages', 'chat_history', 'tags_str', 'tags_pdf_input', 'selected_pdfs']:
             self._manage_session_state(param)
 
         # Display chat messages from history on app rerun
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-                
-    def init_no_key_widget_session_state(self):
-        # Initialize as session_state key
-        for param in ['tags_str', 'tags_pdf_input', 'selected_pdfs', 'engine']:
-            self._manage_session_state(param)
-
             
             
+        ###                    ###
+        ###   ASK RAG PARAMS   ###
+        ###                    ###
     def ask_app_parameters(self):
         logging.debug(f'ASK PARAMS')
         with st.sidebar:
@@ -138,12 +141,12 @@ class RAGPDFapp():
             self._ask_new_or_previously_loaded()
 
     def _ask_engine_features(self):
-        st.radio("LLM mode:", ('Questions', 'Conversation'), 
+        st.radio("LLM mode:", ('Conversation', 'Questions'), 
                  key='llm_mode', horizontal=True, 
                  on_change=self._empty_chat_and_set_engine_features_callback)
 
-        st.radio("LLM external knowledge:", (False, True), 
-                 key='llm_external_knowledge', horizontal=True, 
+        st.radio("LLM knowledge base:", (False, True), 
+                 key='llm_knowledge_base', horizontal=True, 
                  on_change=self._empty_chat_and_set_engine_features_callback)   
         
         st.radio("LLM response streaming:", (False, True), 
@@ -160,8 +163,9 @@ class RAGPDFapp():
     def _empty_chat_and_set_engine_features_callback(self):
         self._manage_session_state('messages', reset=True)
         self._manage_session_state('chat_history', reset=True)
-        RAG_CLS_INST._set_engine_feature(st.session_state.llm_mode, st.session_state.llm_external_knowledge, st.session_state.streaming)
-    
+        RAG_CLS_INST._set_engine_feature(st.session_state.llm_mode, st.session_state.llm_knowledge_base, st.session_state.streaming)
+
+            
     def _empty_chat_callback(self):
         st.session_state.messages = []
         st.session_state.chat_history = []
@@ -169,8 +173,9 @@ class RAGPDFapp():
 
 
         
-        
-    #@st.experimental_fragment
+        ###                    ###
+        ###    ASK RAG INPUT   ###
+        ###                    ###
     def ask_input(self):
         logging.debug(f'ASK INPUT')
         
@@ -221,8 +226,7 @@ class RAGPDFapp():
                                 st.write('Select amongst all your previously loaded PDFs:')
                                 self._ask_previously_loaded_pdfs(all_pdfs)
                                 
-        
-
+                                
     def _pdf_selection_parameter(self):
         st.selectbox('Select a PDF selection parameter:', ['show_all_pdf_names', 'show_pdf_strictly_tagged', 'show_pdf_at_least_one_tag'], 
                      key='pdf_filter_param',
@@ -246,8 +250,6 @@ class RAGPDFapp():
             st.session_state.selected_pdfs = pdf_choices
         else:
             st.session_state.selected_pdfs = selected_pdfs
-        
-        
         
     def _ask_tags(self):
         name_value_sep = '::'
@@ -284,25 +286,24 @@ class RAGPDFapp():
                         on_change=self._empty_chat_callback)
 
 
-
-
-
+    ###                    ###
+    ###       RUN RAG      ###
+    ###                    ###
     def run_chatbot(self):
         if st.session_state.input_source == 'load_new_pdf':
             self.load_new_pdf()
+                
         elif st.session_state.input_source == 'previously_loaded_pdf':
             self.previously_loaded_pdf()      
             
     def load_new_pdf(self):
-        if st.session_state.pdf_input and not RAG_CLS_INST._check_already_loaded(st.session_state.pdf_input):
+        if st.session_state.get('pdf_input', None):
             # Validate pdf input through pydantic
             validate_pdf_input(st.session_state.pdf_input)
             engine = RAG_CLS_INST.load_new_pdf(st.session_state.pdf_input, tags=st.session_state.tags_pdf_input)
             for session_attr in ['tags_str', 'tags_pdf_input']:
                 self._manage_session_state(session_attr, reset=True)     
             self._chat_with_pdf(engine)
-        elif st.session_state.pdf_input and RAG_CLS_INST._check_already_loaded(st.session_state.pdf_input):
-            self.previously_loaded_pdf(files=[st.session_state.pdf_input])
     
     def previously_loaded_pdf(self, files=None):
         logging.debug(f'PREVIOUSLY LOADED PDF FOR CHAT')
