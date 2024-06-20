@@ -6,6 +6,7 @@ from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
 from llama_parse import LlamaParse
+from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.extractors import (TitleExtractor, QuestionsAnsweredExtractor, SummaryExtractor, 
                                          QuestionsAnsweredExtractor, TitleExtractor, KeywordExtractor)
 from llama_index.extractors.entity import EntityExtractor
@@ -55,7 +56,7 @@ class RAGalacticPDF():
 
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.llm = Ollama(model="llama3", request_timeout=200.0, )
+        self.llm = Ollama(model="llama3", request_timeout=300.0, )
         self.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device=self.device)
         self._init_llm_and_embedd_models()
         
@@ -68,7 +69,6 @@ class RAGalacticPDF():
         self.chroma_collection, self.vector_store, self.storage_context = None, None, None
 
         self.use_custom_transforms = False
-        
         self.custom_transforms = [
                 SentenceSplitter(separator=" ", chunk_size=1024, chunk_overlap=128),
                 SummaryExtractor(summaries=["prev", "self", "next"]), # automatically extracts a summary over a set of Nodes
@@ -98,8 +98,13 @@ class RAGalacticPDF():
         # Set up database corresponding to the user_id
         self.chroma_collection, self.vector_store, self.storage_context = self._get_chromadb_setup()
         
-    def _set_engine_feature(self, engine_mode, llm_knowledge_base, streaming):
-        self.llm_mode, self.streaming = engine_mode, streaming
+    def _set_engine_feature(self, engine_mode=None, llm_knowledge_base=None, streaming=None):
+        if engine_mode:
+            self.llm_mode = engine_mode
+        
+        if streaming:
+            self.streaming = streaming
+            
         if llm_knowledge_base:
             self.context_prompt = PROMPT_WITH_KNOWLEDGE_BASE
             self.text_qa_template = PromptTemplate(text_qa_template_str)
@@ -164,13 +169,14 @@ class RAGalacticPDF():
             file_extractor={".pdf": self.parser}
         ).load_data()
         
-    def _add_metadata(self, docs, file_name:str, tags:List[Dict]=None):
-        for document in docs:
-            document.metadata["file_name"] = file_name
-            for dict_tag in tags:
-                # Single entry dict
-                tag_name = next(iter(dict_tag.keys()))
-                document.metadata[tag_name] = dict_tag[tag_name]
+    def _add_metadata_tags(self, docs, file_name:str, tags:List[Dict]=None):
+        if tags:
+            for document in docs:
+                document.metadata["file_name"] = file_name
+                for dict_tag in tags:
+                    # Single entry dict
+                    tag_name = next(iter(dict_tag.keys()))
+                    document.metadata[tag_name] = dict_tag[tag_name]
         return docs
 
     def _create_nodes(self, docs):
@@ -224,7 +230,7 @@ class RAGalacticPDF():
         # Parse pdf (temp saved in dir self.data_folder_path)
         docs = self._parse_pdf(dir_path=self.data_folder_path)
         # Add metadata
-        docs = self._add_metadata(docs, file_name=pdf_input.name, tags=tags)
+        docs = self._add_metadata_tags(docs, file_name=pdf_input.name, tags=tags)
         # Create vector indexing and save it in database
         index = self._create_index(docs)
         # Delete temp pdf
@@ -234,8 +240,6 @@ class RAGalacticPDF():
         # Create engine
         return self._create_corresponding_engine(index)
 
-        
-        
         
         
     ###                        ###
@@ -305,15 +309,12 @@ class RAGalacticPDF():
         # Create query engine
         return self._create_corresponding_engine(index, filters=filters)
 
-    
-
-
 
 
     ###                    ###
     ### GET CHATBOT ENGINE ###
     ###                    ###
-
+    
     def _create_corresponding_engine(self, index, filters=None):
         if self.llm_mode == 'Conversation':
             return self._create_chat_engine(index, filters)
@@ -333,6 +334,9 @@ class RAGalacticPDF():
                                     filters=filters,
                                     verbose=False,                            
                                     )
+
+        
+        
             
     def _create_query_engine(self, index, filters):
         return index.as_query_engine(similarity_top_k=self.similarity_top_k, 
@@ -340,7 +344,7 @@ class RAGalacticPDF():
                                      streaming=self.streaming, 
                                      filters=filters
                                      )
-        
+    
     def run_query(self, query_engine, query_text:str):
         return query_engine.query(query_text)
  

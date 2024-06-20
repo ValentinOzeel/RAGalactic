@@ -139,19 +139,23 @@ class RAGPDFapp():
         with st.sidebar:
             self._ask_engine_features()
             self._ask_new_or_previously_loaded()
+            
+        RAG_CLS_INST._set_engine_feature(engine_mode=st.session_state.llm_mode,
+                                         llm_knowledge_base=st.session_state.llm_knowledge_base,
+                                         streaming=st.session_state.streaming)
 
     def _ask_engine_features(self):
         st.radio("LLM mode:", ('Conversation', 'Questions'), 
                  key='llm_mode', horizontal=True, 
-                 on_change=self._empty_chat_and_set_engine_features_callback)
+                 on_change=self._empty_chat_and_actualize_llm_mode_callback)
 
         st.radio("LLM knowledge base:", (False, True), 
                  key='llm_knowledge_base', horizontal=True, 
-                 on_change=self._empty_chat_and_set_engine_features_callback)   
+                 on_change=self._empty_chat_and_actualize_knowledge_base_callback)   
         
         st.radio("LLM response streaming:", (False, True), 
                  key='streaming',  horizontal=True,
-                 on_change=self._empty_chat_and_set_engine_features_callback)
+                 on_change=self._empty_chat_and_actualize_streaming_callback)
         
            
     def _ask_new_or_previously_loaded(self):
@@ -160,15 +164,22 @@ class RAGPDFapp():
                  key='input_source',
                  on_change=self._empty_chat_callback)
 
-    def _empty_chat_and_set_engine_features_callback(self):
-        self._manage_session_state('messages', reset=True)
-        self._manage_session_state('chat_history', reset=True)
-        RAG_CLS_INST._set_engine_feature(st.session_state.llm_mode, st.session_state.llm_knowledge_base, st.session_state.streaming)
+    def _empty_chat_and_actualize_llm_mode_callback(self):
+        self._empty_chat_callback()
+        RAG_CLS_INST._set_engine_feature(engine_mode=st.session_state.llm_mode)
+        
+    def _empty_chat_and_actualize_knowledge_base_callback(self):
+        self._empty_chat_callback()
+        RAG_CLS_INST._set_engine_feature(llm_knowledge_base=st.session_state.llm_knowledge_base)
+
+    def _empty_chat_and_actualize_streaming_callback(self):
+        self._empty_chat_callback()
+        RAG_CLS_INST._set_engine_feature(streaming=st.session_state.streaming)
 
             
     def _empty_chat_callback(self):
-        st.session_state.messages = []
-        st.session_state.chat_history = []
+        self._manage_session_state('messages', reset=True)
+        self._manage_session_state('chat_history', reset=True)
         RAG_CLS_INST.manage_chat_history(create_or_reset=True)
 
 
@@ -292,7 +303,6 @@ class RAGPDFapp():
     def run_chatbot(self):
         if st.session_state.input_source == 'load_new_pdf':
             self.load_new_pdf()
-                
         elif st.session_state.input_source == 'previously_loaded_pdf':
             self.previously_loaded_pdf()      
             
@@ -301,8 +311,8 @@ class RAGPDFapp():
             # Validate pdf input through pydantic
             validate_pdf_input(st.session_state.pdf_input)
             engine = RAG_CLS_INST.load_new_pdf(st.session_state.pdf_input, tags=st.session_state.tags_pdf_input)
-            for session_attr in ['tags_str', 'tags_pdf_input']:
-                self._manage_session_state(session_attr, reset=True)     
+            #for session_attr in ['tags_str', 'tags_pdf_input']:
+            #    self._manage_session_state(session_attr, reset=True)     
             self._chat_with_pdf(engine)
     
     def previously_loaded_pdf(self, files=None):
@@ -316,7 +326,7 @@ class RAGPDFapp():
             engine = RAG_CLS_INST.load_existing_pdf(st.session_state.selected_pdfs)   
             #self._manage_session_state('selected_pdfs', reset=True) 
             self._chat_with_pdf(engine)
-        
+            
     def _chat_with_pdf(self, engine):
         logging.debug(f'HISTORY: {RAG_CLS_INST.chat_history}')
         if prompt := st.chat_input("You can now start chatting with your PDF."):
