@@ -1,12 +1,13 @@
 # Import modules
 import os
 import json
+from typing import Dict, Tuple, List
+import torch
 
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
 from llama_parse import LlamaParse
-from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.extractors import (TitleExtractor, QuestionsAnsweredExtractor, SummaryExtractor, 
                                          QuestionsAnsweredExtractor, TitleExtractor, KeywordExtractor)
 from llama_index.extractors.entity import EntityExtractor
@@ -21,25 +22,16 @@ from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters, FilterCondition
 
+import nest_asyncio
+nest_asyncio.apply()
+
 from prompt import (PROMPT_NO_KNOWLEDGE_BASE, PROMPT_WITH_KNOWLEDGE_BASE,
                     text_qa_template_str, refine_template_str,
                     text_qa_template_str_no_knowledge_base, refine_template_str_no_knowledge_base)
 
 
-import torch
 
-import nest_asyncio
-nest_asyncio.apply()
 
-from typing import Dict, Tuple, List
-
-import logging
-#logging.basicConfig(level=logging.DEBUG)
-#logging.debug('This is a debug message')
-#logging.info('This is an info message')
-#logging.warning('This is a warning message')
-#logging.error('This is an error message')
-#logging.critical('This is a critical message')
 
 class RAGalacticPDF():
     def __init__(self):
@@ -54,9 +46,8 @@ class RAGalacticPDF():
         self.json_ids_path = os.path.join(self.data_folder_path, 'json_ids.json')
         self.app_credentials_path = os.path.join(self.project_root, 'app_credentials', 'app_credentials.yaml')
 
-
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.llm = Ollama(model="llama3", request_timeout=300.0, )
+        self.llm = Ollama(model="llama3", request_timeout=300.0)
         self.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device=self.device)
         self._init_llm_and_embedd_models()
         
@@ -159,7 +150,6 @@ class RAGalacticPDF():
         if os.path.exists(temp_pdf_path):
             os.remove(temp_pdf_path)
 
-
     def _parse_pdf(self, dir_path:str):
         return SimpleDirectoryReader(
             dir_path,
@@ -191,7 +181,6 @@ class RAGalacticPDF():
         else:
             return VectorStoreIndex(nodes=self._create_nodes(docs), storage_context=self.storage_context)
         
-
     def _add_new_json_data(self, file_name:str, tags:List[Dict]=None):
         # Load existing user ids from json file, or create a new dictionary if the file does not exist
         if os.path.exists(self.json_ids_path):
@@ -271,14 +260,12 @@ class RAGalacticPDF():
                         ]) if tagged_with_all else sorted([
                             file for file, file_tags in zip(files, tags) if any(tag_dict in file_tags for tag_dict in tagged_with_at_least_one)
                             ]) if tagged_with_at_least_one else None
-                        
-                        
+                         
     # Method to extract sorting metrics (key, value) from each single entry dictionary. 
     # To be used for sorting according to key first and then value
     def _sort_key(self, dictionnary):
         key, value = next(iter(dictionnary.items()))
         return (key, value)
-
 
     def get_users_tags(self):
         if os.path.exists(self.json_ids_path):
@@ -290,7 +277,6 @@ class RAGalacticPDF():
                 all_unique_tags = [
                     {tag_name: tag} for tag_name, tag in set(tuple(single_entry_dict.items())[0] for tag_dict_list in json_data[self.user_id]['tags'] for single_entry_dict in tag_dict_list)
                     ] if (json_data[self.user_id].get('tags') and json_data[self.user_id]['tags']) else None
-
                 # Return list of single entry dict (list sorted by dict key first and then by dict value) or None
                 return sorted(all_unique_tags, key=self._sort_key) if all_unique_tags else None
         
@@ -300,12 +286,8 @@ class RAGalacticPDF():
     def load_existing_pdf(self, pdf_names):
         ## Load existing index from database
         index = self._get_index(self.vector_store)
-        
         filter_list = [MetadataFilter(key="file_name", value=pdf_name) for pdf_name in pdf_names]
         filters = MetadataFilters(filters=filter_list, condition=FilterCondition.OR)
-        
-        logging.debug(f'FILTERRRRRRS: {filters}')
-        
         # Create query engine
         return self._create_corresponding_engine(index, filters=filters)
 
@@ -335,9 +317,6 @@ class RAGalacticPDF():
                                     verbose=False,                            
                                     )
 
-        
-        
-            
     def _create_query_engine(self, index, filters):
         return index.as_query_engine(similarity_top_k=self.similarity_top_k, 
                                      text_qa_template=self.text_qa_template, refine_template=self.refine_template,
@@ -350,7 +329,6 @@ class RAGalacticPDF():
  
     def run_chat(self, chat_engine, prompt:str):
         return chat_engine.stream_chat(prompt) if self.streaming else chat_engine.chat(prompt)
-    
 
     def manage_chat_history(self, create_or_reset:bool=False, to_append:Tuple=()):
         if create_or_reset:

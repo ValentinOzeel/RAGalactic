@@ -82,17 +82,21 @@ class RAGPDFapp():
     def _get_cookie_manager_secret_key(self):
         root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         cred_path = os.path.join(root, 'app_credentials', 'app_credentials.yaml')
+        secret_key = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8')
         
-        with open(cred_path, 'r') as file:
-            credentials = yaml.safe_load(file)
-        
-        if credentials and credentials.get('secret_key'):
-            secret_key = credentials['secret_key']
+        if not os.path.exists(cred_path):
+            with open(cred_path, 'w') as file:
+                yaml.dump({'secret_key': secret_key}, file, default_flow_style=False) 
         else:
-            secret_key = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8')
-            # Write the secret key in the cred file  
-            with open(cred_path, 'w') as outfile:
-                yaml.dump({'secret_key': secret_key}, outfile, default_flow_style=False)
+            with open(cred_path, 'r') as file:
+                credentials = yaml.safe_load(file)
+
+            if credentials and credentials.get('secret_key'):
+                secret_key = credentials['secret_key']
+            else:
+                # Write the secret key in the cred file  
+                with open(cred_path, 'w') as outfile:
+                    yaml.dump({'secret_key': secret_key}, outfile, default_flow_style=False)
         return secret_key
     
     # Get or create a user ID for the current session
@@ -344,7 +348,6 @@ class RAGPDFapp():
             self._add_to_chat_history('user', str(prompt))
             self._add_to_chat_history('system', str(rag_response))
 
-
     def _add_to_chat_history(self, who:str, message:str):
         st.session_state.chat_history.append(ChatMessage(role=who, content=message))
         RAG_CLS_INST.chat_history = st.session_state.chat_history
@@ -352,7 +355,10 @@ class RAGPDFapp():
             
 
 
-
+if __name__ == "__main__":
+    
+    # Launch the app
+    RAGPDFapp()
 
 
 
