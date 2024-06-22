@@ -15,9 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
     
 logging.debug(f'CHECK MAIN')
 
-
 from llama_index.core.llms import ChatMessage
-
 
 # Create instance of RAGSinglePDF class
 RAG_CLS_INST = RAGalacticPDF()
