@@ -1,7 +1,7 @@
 # RAGalacticPDF
 
-RAGalacticPDF is an interactive AI assistant embedded within a Retrieval-Augmented Generation (RAG) system, tailored specifically for PDF documents.    
-This application allows users to engage with one or several of their PDFs through a conversational AI interface, offering detailed responses to user queries based on document content and chat history.    
+RAGalacticPDF is an interactive AI assistant embedded within a Retrieval-Augmented Generation (RAG) system, tailored specifically for PDF documents. This application allows users to engage with one or several of their PDFs through a conversational AI interface, offering detailed responses to user queries based on document content and chat history.    
+    
 The application supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries. Users can also choose between streaming responses in real-time or receiving complete answers at once.     
 Users can seamlessly manage their PDFs by uploading new documents directly into the application and organizing them with user-defined tags for easy retrieval. For previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
 RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history, ensuring adherence to specific knowledge usage policies.     
@@ -9,29 +9,29 @@ Furthermore, the documents used in generating responses are automatically cited 
 
 ## Key Features:
 
-• Interactive PDF Assistant: Engage with your PDF documents through a chatbot interface.
+• **Interactive PDF Assistant**: Engage with your PDF documents through a chatbot interface.
 
-• PDF Management:
-    Load New PDFs: 
+• **PDF Management**:
+    *Load New PDFs*: 
         - Upload and process new PDF documents directly into the application.
         - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.
-    Previously Loaded PDFs: 
+    *Previously Loaded PDFs*: 
         - Access and interact with PDFs that have been previously loaded into the system.
         - Filter by Tags:
             All Tags Requirement: Filter PDFs requiring all specified tags for selection.
             Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.
 
-• Conversation Modes: Choose between a conversational mode for interactive discussions (with chat history awareness) or a question mode for straightforward queries.
+• **Conversation Modes**: Choose between a conversational mode for interactive discussions (with chat history awareness) or a question mode for straightforward queries.
 
-• Streaming Mode: Choose between real-time streaming of responses or waiting for the answer to come all at once.
+• **Streaming Mode**: Choose between real-time streaming of responses or waiting for the answer to come all at once.
 
-• External Knowledge Integration:
-    Knowledge Base Usage: Optionally allow the AI to leverage its knowledge base for enhanced response accuracy.
-    No Knowledge Base Usage: Strictly limit responses to information contained within uploaded PDFs and chat history.
+• **External Knowledge Integration**:
+    *Knowledge Base Usage*: Optionally allow the AI to leverage its knowledge base for enhanced response accuracy.
+    *No Knowledge Base Usage*: Strictly limit responses to information contained within uploaded PDFs and chat history.
 
-• Accurate Document Citation: Automatically cite documents used to generate responses, ensuring transparency and traceability of information sources.
+• **Accurate Document Citation**: Automatically cite documents used to generate responses, ensuring transparency and traceability of information sources.
 
-• User Authentication: Maintain user sessions with unique user IDs and encrypted cookies.
+• **User Authentication**: Maintain user sessions with unique user IDs and encrypted cookies.
 
 ## Architecture
 
@@ -72,6 +72,53 @@ https://python-poetry.org/docs/
 - Run the application:
 
         streamlit run src\app.py --client.showErrorDetails=false
+
+
+#### Using Docker
+
+- Clone the repository:
+
+        git clone https://github.com/yourusername/RAGalacticPDF.git
+
+- cd to the corresponding folder
+
+        cd Your/Path/To/The/Cloned/RAGalactic/RAGalacticPDF 
+
+- Build the Docker image:
+
+        docker build -t ragalacticpdf .
+
+- Run the Docker container:
+
+        docker run -p 8501:8501 ragalacticpdf
+
+## What could be improved
+
+- Using different models regarding llm used (currently llama3 through ollama) and embeddings (currently BAAI/bge-small-en-v1.5 through HuggingFace)
+
+- Could use another database such as Milvus, a GPU-optimized vector database, which also allow for Hybrid Search (combining keyword-based search with vector/semantic search), a technique not usable with Chroma db.
+
+- Use other advanced capabilities such as implementing postnodeprocessor for nodes reranking upon retrieval.
+
+- Currently, only .pdf files are accepted. Other document types could be used (not tested) by modifying the `required_exts` kwarg in the following code in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py):
+
+        def _parse_pdf(self, dir_path:str):
+            return SimpleDirectoryReader(
+                dir_path,
+                required_exts=[".pdf"],
+                filename_as_id=True,
+                #file_metadata= lambda filepath: {'file_name': os.path.basename(filepath), 'tags': tags}, 
+                file_extractor={".pdf": self.parser}
+            ).load_data() 
+
+- We could add the ability for the user to remove previously updated documents.
+
+
+
+
+
+
+
 
 
 
