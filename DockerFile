@@ -4,17 +4,23 @@ FROM python:3.10-slim
 RUN apt-get update && \
     apt-get -y install git && \
     apt-get clean
-    
+
 # Set the project root as environment variable
 ENV container_workdir /app
 
-# Set the working directory
-WORKDIR $container_workdir
+# Define an argument used at build-time (used by the app to access the Llama parse api)
+ARG LLAMA_CLOUD_API_KEY
+# Set the API key as an environment variable
+ENV LLAMA_CLOUD_API_KEY=${LLAMA_CLOUD_API_KEY}
 
 # Copy the requirements.txt file to the container
 COPY requirements.txt /tmp/requirements.txt
+
 # Install requirements
-RUN pip install --no-cache -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
+
+# Set the working directory
+WORKDIR $container_workdir
 
 # Copy the rest of the application code except what's in .dockerignore
 COPY . .
@@ -23,4 +29,7 @@ COPY . .
 EXPOSE 8501
 
 # Run the application
-CMD ["streamlit", "run", "src\app.py", "--client.showErrorDetails=false"]
+CMD ["streamlit", "run", "RAGalacticPDF/src/app.py", "--client.showErrorDetails=false"]
+
+# Command for debugg
+#CMD ["sh", "-c", "sleep 600"]
