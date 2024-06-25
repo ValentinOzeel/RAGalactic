@@ -30,7 +30,10 @@ from prompt import (PROMPT_NO_KNOWLEDGE_BASE, PROMPT_WITH_KNOWLEDGE_BASE,
                     text_qa_template_str_no_knowledge_base, refine_template_str_no_knowledge_base)
 
 
-
+import logging
+logging.basicConfig(level=logging.DEBUG)
+    
+logging.debug(f'CHECK RAGGGG')
 
 
 class RAGalacticPDF():
@@ -47,7 +50,16 @@ class RAGalacticPDF():
         self.app_credentials_path = os.path.join(self.project_root, 'app_credentials', 'app_credentials.yaml')
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.llm = Ollama(model="llama3", request_timeout=300.0)
+        
+        logging.debug(f'CHECK OLLAMA')
+        if "OLLAMA_BASE_URL" in os.environ:
+            # Currently running in Docker so need to provide the URL to access to ollama (also running in a container)
+            logging.debug(f"RUNNING IN DOCKER {os.environ.get('OLLAMA_BASE_URL')}")
+            self.llm = Ollama(model="llama3", request_timeout=300.0, base_url=os.environ.get('OLLAMA_BASE_URL'))
+        else:
+            logging.debug(f'NOT RUNNING IN DOCKER')
+            self.llm = Ollama(model="llama3", request_timeout=300.0)
+
         self.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device=self.device)
         self._init_llm_and_embedd_models()
         
@@ -76,7 +88,7 @@ class RAGalacticPDF():
         self.text_qa_template = None
         self.refine_template = None
         # Engine parameters
-        self.similarity_top_k=3 
+        self.similarity_top_k=6 
         self.chat_mode='condense_plus_context'
 
     def _init_llm_and_embedd_models(self):

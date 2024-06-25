@@ -2,6 +2,7 @@
 
 RAGalacticPDF is an interactive AI assistant embedded within a Retrieval-Augmented Generation (RAG) system, tailored for PDF documents. This application allows users to engage with one or several of their PDFs through a conversational AI interface, offering detailed responses to user queries based on document content and chat history.    
     
+The application runs completely locally.
 The application supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries. Users can also choose between streaming responses in real-time or receiving complete answers at once.     
 Users can seamlessly manage their PDFs by uploading new documents directly into the application and organizing them with user-defined tags for easy retrieval. For previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
 RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history, ensuring adherence to specific knowledge usage policies.     
@@ -9,7 +10,7 @@ Furthermore, the documents used in generating responses are automatically cited 
 
 ## Key Features:
 
-• **Interactive PDF Assistant**: Engage with your PDF documents through a chatbot interface.
+• **Interactive PDF Assistant running locally**: Engage with your PDF documents through a chatbot interface running locally on your machine.
 
 • **PDF Management**:
     *Load New PDFs*: 
@@ -29,11 +30,13 @@ Furthermore, the documents used in generating responses are automatically cited 
     *Knowledge Base Usage*: Optionally allow the AI to leverage its knowledge base for enhanced response accuracy.
     *No Knowledge Base Usage*: Strictly limit responses to information contained within uploaded PDFs and chat history.
 
-• **Accurate Document Citation**: Automatically cite documents used to generate responses, ensuring transparency and traceability of information sources.
+• **Accurate Document Citation**: Cite the documents used to generate responses, ensuring transparency and traceability of information sources.
 
 • **User Authentication**: Maintain user sessions with unique user IDs and encrypted cookies.
 
 ## Architecture
+
+Running in virtual environment through poetry or running as a contenerized app with Docker/Docker-compose.
 
 language: Python    
 Frontend: Streamlit for gathering user's options and inputs as well as for building the conversational interface.    
@@ -59,14 +62,21 @@ Then set the API key as the environemment variable **LLAMA_CLOUD_API_KEY**.
 
 #### Using Poetry
 
-- Install poetry
+- Install poetry:
 https://python-poetry.org/docs/
 
-- Clone the repository
+- Install ollama:
+https://ollama.com/download
+
+- Pull the used model (llama3, 8b parameter version):
+
+        ollama run llama3
+
+- Clone the RAGalactic repository:
 
         git clone https://github.com/ValentinOzeel/RAGalactic.git
 
-- cd to the corresponding folder
+- cd to the corresponding folder:
 
         cd Your/Path/To/The/Cloned/RAGalactic  
 
@@ -78,32 +88,39 @@ https://python-poetry.org/docs/
 
 - Run the application:
 
-        streamlit run src\app.py --client.showErrorDetails=false
+        streamlit run RAGalacticPDF/src/app.py --client.showErrorDetails=false
 
 
 #### Using Docker
 
-- Clone the repository:
+- You need a cuda-enabled GPU and the cuda container toolkit available on your machine:
+https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+
+- Docker related installs:
+    - Docker: https://docs.docker.com/engine/install/
+    - Docker desktop: https://docs.docker.com/desktop/install/windows-install/
+    - Docker compose: https://docs.docker.com/compose/install/
+
+- Clone the RAGalactic repository:
 
         git clone https://github.com/ValentinOzeel/RAGalactic.git
 
-- cd to the corresponding folder
+- cd to the corresponding folder:
 
         cd Your/Path/To/The/Cloned/RAGalactic 
 
-- Build the Docker image (replace `your_api_key_here` with your LLAMA_CLOUD_API_KEY API key):
+- Create an .env file (based on .env_exemple template) and add your LLAMA_CLOUD_API_KEY API key:
 
-        docker build --build-arg LLAMA_CLOUD_API_KEY=your_api_key_here -t ragalactic .
+- Build the RAGalactic image and start all the services defined in the docker-compose file:
 
-- Run the Docker container:
+        docker compose up --build
 
-        docker run -p 8501:8501 ragalactic
 
 ## What could be improved
 
-- Using more efficient models regarding both the llm used (currently llama3 through ollama) and embeddings (currently BAAI/bge-small-en-v1.5 through HuggingFace).
+- Using different models regarding both the llm used (currently llama3 through ollama) and embeddings (currently BAAI/bge-small-en-v1.5 through HuggingFace).
 
-- Let the user choose the llm and embedding models.
+- Potentially let the user choose the llm and embedding models.
 
 - Could use another database such as Milvus, a GPU-optimized vector database, which also allow for Hybrid Search (combining keyword-based search with vector/semantic search), a technique not usable with Chroma db.
 
@@ -120,7 +137,7 @@ https://python-poetry.org/docs/
                 file_extractor={".pdf": self.parser}
             ).load_data() 
 
-- We could add the ability for the user to remove previously updated documents.
+- We could add the ability for the user to remove previously uploaded documents.
 
 
 

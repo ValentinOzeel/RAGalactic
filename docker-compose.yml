@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: ragalactic_app
+    ports:
+      - 8501:8501
+    volumes:
+      - ./RAGalacticPDF/data:/app/RAGalacticPDF/data
+      - ./RAGalacticPDF/chroma_db_data:/app/RAGalacticPDF/chroma_db_data
+    restart: always
+    environment:
+      - LLAMA_CLOUD_API_KEY=${LLAMA_CLOUD_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    networks:
+      - ollama-docker
+      
+  ollama:
+    volumes:
+      - C:\Users\V.ozeel\.ollama:/root/.ollama
+    container_name: ollama
+    pull_policy: always
+    restart: unless-stopped
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    networks:
+      - ollama-docker
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    #command: ollama pull llama3
+
+  ollama-pull:
+    image: docker/genai:ollama-pull
+    env_file:
+      - .env
+
+volumes:
+  ollama_volume:
+
+networks:
+  ollama-docker:
+#    external: false

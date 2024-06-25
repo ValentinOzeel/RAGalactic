@@ -1,2 +1,4 @@
 poetry.lock
 pyproject.toml
+RAGalacticPDF/data
+RAGalacticPDF/chroma_db_data
