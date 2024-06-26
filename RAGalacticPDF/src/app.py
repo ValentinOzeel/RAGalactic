@@ -332,20 +332,21 @@ class RAGPDFapp():
             
     def _chat_with_pdf(self, engine):
         logging.debug(f'HISTORY: {st.session_state.RAG_CLS_INST.chat_history}')
-        if prompt := st.chat_input("You can now start chatting with your PDF."):
+        if prompt := st.chat_input("Start chatting with your PDF."):
             st.session_state.messages.append({"role": "user", "content": prompt}) 
             
             with st.chat_message("user"):
                 st.markdown(prompt)
-
-            with st.chat_message("assistant"):
-                if prompt:
-                    rag_response = st.session_state.RAG_CLS_INST.run_chat(engine, prompt) if st.session_state.llm_mode == 'Conversation' else st.session_state.RAG_CLS_INST.run_query(engine, prompt)
-                    st.write_stream(rag_response.response_gen) if st.session_state.streaming else st.markdown(rag_response.response)
-            
-            st.session_state.messages.append({"role": "assistant", "content": str(rag_response)})
             self._add_to_chat_history('user', str(prompt))
-            self._add_to_chat_history('system', str(rag_response))
+            
+            if st.session_state.messages[-1]["role"] != "assistant":
+                rag_response = st.session_state.RAG_CLS_INST.run_chat(engine, prompt) if st.session_state.llm_mode == 'Conversation' else st.session_state.RAG_CLS_INST.run_query(engine, prompt)
+                
+                with st.chat_message("assistant") and st.spinner('AI is thinking...'):
+                    response = st.write_stream(rag_response.response_gen) if st.session_state.streaming else st.markdown(rag_response.response)
+                        
+                st.session_state.messages.append({"role": "assistant", "content": str(response)})
+                self._add_to_chat_history('system', str(rag_response))
 
     def _add_to_chat_history(self, who:str, message:str):
         logging.debug(f'HISTORY: {st.session_state.RAG_CLS_INST.chat_history}')
