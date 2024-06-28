@@ -5,8 +5,22 @@
             "quantum-computing.pdf"
         ],
         "tags": [
-            null,
-            null
+            [
+                {
+                    "type": "quantum"
+                },
+                {
+                    "document": "waves"
+                }
+            ],
+            [
+                {
+                    "type": "quantum"
+                },
+                {
+                    "document": "quantum_computing"
+                }
+            ]
         ]
     }
 }

@@ -2,10 +2,10 @@
 
 RAGalacticPDF is an interactive AI assistant embedded within a Retrieval-Augmented Generation (RAG) system, tailored for PDF documents. This application allows users to engage with one or several of their PDFs through a conversational AI interface, offering detailed responses to user queries based on document content and chat history.    
     
-The application runs completely locally.
-The application supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries. Users can also choose between streaming responses in real-time or receiving complete answers at once.     
-Users can seamlessly manage their PDFs by uploading new documents directly into the application and organizing them with user-defined tags for easy retrieval. For previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
-RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history, ensuring adherence to specific knowledge usage policies.     
+The application, which runs completely locally, supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries.     
+Users can seamlessly manage their PDFs by uploading new documents directly into the application and organizing them with user-defined tags for easy retrieval.     
+For previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
+RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history, ensuring adherence to specific knowledge usage policies. Users can also choose between streaming responses in real-time or receiving complete answers at once.       
 Furthermore, the documents used in generating responses are automatically cited in conversation mode, promoting transparency and accountability in information sourcing. It also maintains secure user sessions with unique IDs and encrypted cookies, ensuring data privacy and continuity across sessions.     
 
 ## Key Features:
@@ -13,14 +13,14 @@ Furthermore, the documents used in generating responses are automatically cited 
 • **Interactive PDF Assistant running locally**: Engage with your PDF documents through a chatbot interface running locally on your machine.
 
 • **PDF Management**:
-    *Load New PDFs*: 
-        - Upload and process new PDF documents directly into the application.
-        - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.
-    *Previously Loaded PDFs*: 
-        - Access and interact with PDFs that have been previously loaded into the system.
-        - Filter by Tags:
-            All Tags Requirement: Filter PDFs requiring all specified tags for selection.
-            Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.
+    *Load New PDFs*:     
+        - Upload and process new PDF documents directly into the application.     
+        - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
+    *Previously Loaded PDFs*:    
+        - Access and interact with PDFs that have been previously loaded into the system.    
+        - Filter by Tags:    
+            All Tags Requirement: Filter PDFs requiring all specified tags for selection.    
+            Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.    
 
 • **Conversation Modes**: Choose between a conversational mode for interactive discussions (with chat history awareness) or a question mode for straightforward queries.
 
@@ -36,28 +36,27 @@ Furthermore, the documents used in generating responses are automatically cited 
 
 ## Architecture
 
-Running in virtual environment through poetry or running as a contenerized app with Docker/Docker-compose.
+Running in virtual environment through poetry or running as a contenerized app with Docker/Docker-compose (multi-services, multi-containers including RAGalactic app, ollama and genai ollama model auto pulling containers).
 
 language: Python    
-Frontend: Streamlit for gathering user's options and inputs as well as for building the conversational interface.    
-Backend: LlamaIndex as the RAG framework and PDF parsing, Pydantic for data input validation.    
-Database: Chroma database for storing embedded nodes.   
+Frontend: Streamlit for gathering user's options and inputs as well as for building the conversational LLM interface. The application uses encrypted cookies to manage user sessions.   
+Backend: LlamaIndex as the RAG framework and PDF parsing tool, Pydantic for data input validation.    
+Database: Chroma database for storing user's embedded nodes.   
 LLM: Currently llama3 through ollama (`self.llm` attribute can be modified in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py)) 
 Embeddings model: Currently BAAI/bge-small-en-v1.5 through HuggingFace (`self.embed_model` attribute can be modified in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py))
 
     
 [app.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/app.py): Main application script to run the Streamlit app.    
 [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py): Contains the RAGalacticPDF class that handles the core RAG functionality built on LlamaIndex.    
-[prompt.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/prompt.py): Contains the prompt engeenered templates used by the RAG system (enables various option such as knowledge base usage or not depending on the prompt used).    
+[prompt.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/prompt.py): Contains the prompt engeenered templates used by the RAG system (enables various option such as knowledge base usage or not depending on the prompt used, citation of used document to provide the user with an answer etc...).    
 [pydantic_valids.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/pydantic_valids.py): Contains the Pydantic validation for PDF file inputs.    
     
-The application uses encrypted cookies to manage user sessions.
 
 
 ## Installation and usage
 
 Start by visiting https://docs.llamaindex.ai/en/stable/llama_cloud/llama_parse/ to get an API key for LlamaParse (used to parse the .pdf files).     
-Then set the API key as the environemment variable **LLAMA_CLOUD_API_KEY**.    
+Then set the API key as the environmment variable **LLAMA_CLOUD_API_KEY**.    
 
 
 #### Using Poetry
@@ -109,7 +108,7 @@ https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install
 
         cd Your/Path/To/The/Cloned/RAGalactic 
 
-- Create an .env file (based on .env_exemple template) and add your LLAMA_CLOUD_API_KEY API key:
+- Create an .env file (based on [.env_exemple](https://github.com/ValentinOzeel/RAGalactic/blob/main/.env_exemple) template) and add your LLAMA_CLOUD_API_KEY API key.
 
 - Build the RAGalactic image and start all the services defined in the docker-compose file:
 
@@ -118,7 +117,7 @@ https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install
 
 ## What could be improved
 
-- Using different models regarding both the llm used (currently llama3 through ollama) and embeddings (currently BAAI/bge-small-en-v1.5 through HuggingFace).
+- Trying other models regarding both the llm used (currently llama3 through ollama) and embeddings (currently BAAI/bge-small-en-v1.5 through HuggingFace).
 
 - Potentially let the user choose the llm and embedding models.
 

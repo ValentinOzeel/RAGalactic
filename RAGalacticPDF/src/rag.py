@@ -88,7 +88,7 @@ class RAGalacticPDF():
         self.text_qa_template = None
         self.refine_template = None
         # Engine parameters
-        self.similarity_top_k=6 
+        self.similarity_top_k=3 
         self.chat_mode='condense_plus_context'
 
     def _init_llm_and_embedd_models(self):

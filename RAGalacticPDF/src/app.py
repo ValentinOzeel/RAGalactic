@@ -157,7 +157,7 @@ class RAGPDFapp():
                  on_change=self._empty_chat_and_actualize_knowledge_base_callback)   
         
         st.radio("LLM response streaming:", (False, True), 
-                 key='streaming',  horizontal=True,
+                 key='streaming',  horizontal=True, index=1,
                  on_change=self._empty_chat_and_actualize_streaming_callback)
         
            
