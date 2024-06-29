@@ -2,35 +2,36 @@
 
 RAGalacticPDF is an interactive AI assistant embedded within a Retrieval-Augmented Generation (RAG) system, tailored for PDF documents. This application allows users to engage with one or several of their PDFs through a conversational AI interface, offering detailed responses to user queries based on document content and chat history.    
     
-The application, which runs completely locally, supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries.     
+The application, which runs completely locally, maintains secure user sessions with unique IDs and encrypted cookies, ensuring continuity across sessions.     
+It supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries.     
 Users can seamlessly manage their PDFs by uploading new documents directly into the application and organizing them with user-defined tags for easy retrieval.     
-For previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
-RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history, ensuring adherence to specific knowledge usage policies. Users can also choose between streaming responses in real-time or receiving complete answers at once.       
-Furthermore, the documents used in generating responses are automatically cited in conversation mode, promoting transparency and accountability in information sourcing. It also maintains secure user sessions with unique IDs and encrypted cookies, ensuring data privacy and continuity across sessions.     
+With regards to previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
+RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history. Users can also choose between streaming responses in real-time or receiving complete answers at once.       
+Furthermore, the documents used in generating responses are automatically cited in conversation mode, promoting transparency in information sourcing.           
 
 ## Key Features:
 
 • **Interactive PDF Assistant running locally**: Engage with your PDF documents through a chatbot interface running locally on your machine.
 
-• **PDF Management**:     
-    - *Load New PDFs*:     
-        * Upload and process new PDF documents directly into the application.     
-        * Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
-    - *Previously Loaded PDFs*:    
-        * Access and interact with PDFs that have been previously loaded into the system.    
-        * Filter by Tags:    
-            * All Tags Requirement: Filter PDFs requiring all specified tags for selection.    
-            * Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.    
+• **PDF Management**:
+    - *Load New PDFs*:
+        - Upload and process new PDF documents directly into the application.
+        - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.
+    - *Previously Loaded PDFs*:
+        - Access and interact with PDFs that have been previously loaded into the system.
+        - Filter by Tags:
+            - All Tags Requirement: Filter PDFs requiring all specified tags for selection.
+            - Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.   
 
 • **Conversation Modes**: Choose between a conversational mode for interactive discussions (with chat history awareness) or a question mode for straightforward queries.
 
 • **Streaming Mode**: Choose between real-time streaming of responses or waiting for the answer to come all at once.
 
-• **External Knowledge Integration**:
+• **External Knowledge Integration** (through prompt engeenering):
     *Knowledge Base Usage*: Optionally allow the AI to leverage its knowledge base for enhanced response accuracy.
     *No Knowledge Base Usage*: Strictly limit responses to information contained within uploaded PDFs and chat history.
 
-• **Accurate Document Citation**: Cite the documents used to generate responses, ensuring transparency and traceability of information sources.
+• **Accurate Document Citation** (through prompt engeenering): Cite the documents used to generate responses, ensuring transparency and traceability of information sources.
 
 • **User Authentication**: Maintain user sessions with unique user IDs and encrypted cookies.
 
@@ -40,12 +41,12 @@ https://github.com/ValentinOzeel/RAGalactic/assets/117592568/791b2a9d-083f-4633-
 
 Disclosure: Some parts of the video have been slightly edited (cuts and video speed augments) notably when the LLM response is generating. App running locally on PC (GPU: NVIDIA GeForce GTX 1660 Ti).     
      
-0-0.26: Load first pdf (waves_quantum.pdf) related to general quantum mechanics with tags (we could then directly talk to this document).     
-0.26-0.42: Load second pdf (quantum-computing.pdf) with appropriate tags.     
-0.42-1.15: Select previously loaded pdfs to talk, with possibility to filter based on tags.      
-1.15-2.24: Exemple of a query needing information from different documents (with accurate listing of used documents).      
-2.24-3.43: Exemple of custom instruction (answer in one sentence) and citation of the corresponding document covering the question (despite having selected all previously loaded document option). Then ask for more details about the question.         
-3.43-4.51: Show the RAG response to question without activating the LLM pre-existing knowledge base VS with the LLM knowledge option activated.     
+**0-0.26**: Load first pdf (waves_quantum.pdf) related to general quantum mechanics with tags (we could then directly talk to this document).     
+**0.26-0.42**: Load second pdf (quantum-computing.pdf) with appropriate tags.     
+**0.42-1.15**: Select previously loaded pdfs to talk, with possibility to filter based on tags.      
+**1.15-2.24**: Exemple of a query needing information from different documents (with accurate listing of used documents).      
+**2.24-3.43**: Exemple of custom instruction (answer in one sentence) and citation of the corresponding document covering the question (despite having selected all previously loaded document option). Then ask for more details about the question.         
+**3.43-4.51**: RAG response without activating LLM's pre-existing knowledge base VS with LLM's knowledge option activated.     
 
 ## Architecture
 
