@@ -12,15 +12,15 @@ Furthermore, the documents used in generating responses are automatically cited 
 
 • **Interactive PDF Assistant running locally**: Engage with your PDF documents through a chatbot interface running locally on your machine.
 
-• **PDF Management**:
-    *Load New PDFs*:     
-        - Upload and process new PDF documents directly into the application.     
-        - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
-    *Previously Loaded PDFs*:    
-        - Access and interact with PDFs that have been previously loaded into the system.    
-        - Filter by Tags:    
-            All Tags Requirement: Filter PDFs requiring all specified tags for selection.    
-            Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.    
+• **PDF Management**:     
+    - *Load New PDFs*:     
+        * Upload and process new PDF documents directly into the application.     
+        * Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
+    - *Previously Loaded PDFs*:    
+        * Access and interact with PDFs that have been previously loaded into the system.    
+        * Filter by Tags:    
+            * All Tags Requirement: Filter PDFs requiring all specified tags for selection.    
+            * Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.    
 
 • **Conversation Modes**: Choose between a conversational mode for interactive discussions (with chat history awareness) or a question mode for straightforward queries.
 
@@ -33,6 +33,19 @@ Furthermore, the documents used in generating responses are automatically cited 
 • **Accurate Document Citation**: Cite the documents used to generate responses, ensuring transparency and traceability of information sources.
 
 • **User Authentication**: Maintain user sessions with unique user IDs and encrypted cookies.
+
+## App demo
+
+https://github.com/ValentinOzeel/RAGalactic/assets/117592568/791b2a9d-083f-4633-8e25-5649a9f4a88f
+
+Disclosure: Some parts of the video have been slightly edited (cuts and video speed augments) notably when the LLM response is generating. App running locally on PC (GPU: NVIDIA GeForce GTX 1660 Ti).     
+     
+0-0.26: Load first pdf (waves_quantum.pdf) related to general quantum mechanics with tags (we could then directly talk to this document).     
+0.26-0.42: Load second pdf (quantum-computing.pdf) with appropriate tags.     
+0.42-1.15: Select previously loaded pdfs to talk, with possibility to filter based on tags.      
+1.15-2.24: Exemple of a query needing information from different documents (with accurate listing of used documents).      
+2.24-3.43: Exemple of custom instruction (answer in one sentence) and citation of the corresponding document covering the question (despite having selected all previously loaded document option). Then ask for more details about the question.         
+3.43-4.51: Show the RAG response to question without activating the LLM pre-existing knowledge base VS with the LLM knowledge option activated.     
 
 ## Architecture
 
