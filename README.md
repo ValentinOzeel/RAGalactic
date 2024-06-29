@@ -1,19 +1,20 @@
-# RAGalacticPDF
+# RAGalactic
 
-RAGalacticPDF is an interactive AI assistant embedded within a Retrieval-Augmented Generation (RAG) system, tailored for PDF documents. This application allows users to engage with one or several of their PDFs through a conversational AI interface, offering detailed responses to user queries based on document content and chat history.    
+**RAGalactic** is an interactive AI assistant embedded within a **Retrieval-Augmented Generation** (_RAG_) system, tailored for _PDF_ documents. This application allows users to engage with one or several of their PDFs through a _conversational AI interface_, offering detailed responses to user queries based on _document content and chat history_.    
     
-The application, which runs completely locally, maintains secure user sessions with unique IDs and encrypted cookies, ensuring continuity across sessions.     
-It supports two distinct modes: a conversational mode, which enables interactive discussions with awareness of chat history, and a question mode tailored for straightforward inquiries.     
-Users can seamlessly manage their PDFs by uploading new documents directly into the application and organizing them with user-defined tags for easy retrieval.     
-With regards to previously uploaded PDFs, the app provides robust filtering options based on tag requirements, allowing users to refine their selections precisely.     
-RAGalacticPDF offers flexibility in information retrieval strategies with options to integrate external knowledge sources for more comprehensive responses or to restrict responses strictly to the content within uploaded PDFs and chat history. Users can also choose between streaming responses in real-time or receiving complete answers at once.       
-Furthermore, the documents used in generating responses are automatically cited in conversation mode, promoting transparency in information sourcing.           
+The application, which runs completely **locally**, maintains secure _user specific sessions_ with unique IDs and encrypted cookies, ensuring continuity across sessions.     
+It supports two distinct modes: a _conversational mode_, which enables interactive discussions with awareness of chat history, and a _question mode_ tailored for straightforward inquiries.     
+Users can seamlessly manage their PDFs by _uploading new documents_ directly into the application and organizing them with **user-defined tags** for easy retrieval.     
+With regards to _previously uploaded PDFs_, the app provides robust **filtering options based on tag requirements**, allowing users to _refine their document selections_ precisely before to interact with the RAG system.   
+Furthermore, _documents used in generated responses_ are **automatically cited** in conversation mode, promoting transparency in _information sourcing_.     
+**RAGalactic** offers flexibility in information retrieval strategies with options to **integrate LLM knowledge base** for more comprehensive responses or to **restrict responses** strictly to the **content within uploaded PDFs and chat history**. Users can also choose between **streaming responses** in real-time or receiving complete answers at once.       
+        
 
 ## Key Features:
 
 • **Interactive PDF Assistant running locally**: Engage with your PDF documents through a chatbot interface running locally on your machine.
 
-• **PDF Management**:    
+• **PDF Management**:
 1. *Load New PDFs*:    
     - Upload and process new PDF documents directly into the application.    
     - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
@@ -41,23 +42,23 @@ https://github.com/ValentinOzeel/RAGalactic/assets/117592568/791b2a9d-083f-4633-
 
 Disclosure: Some parts of the video have been slightly edited (cuts and video speed augments) notably when the LLM response is generating. App running locally on PC (GPU: NVIDIA GeForce GTX 1660 Ti).     
      
-**0-0.26**: Load first pdf (waves_quantum.pdf) related to general quantum mechanics with tags (we could then directly talk to this document).     
-**0.26-0.42**: Load second pdf (quantum-computing.pdf) with appropriate tags.     
-**0.42-1.15**: Select previously loaded pdfs to talk, with possibility to filter based on tags.      
-**1.15-2.24**: Exemple of a query needing information from different documents (with accurate listing of used documents).      
-**2.24-3.43**: Exemple of custom instruction (answer in one sentence) and citation of the corresponding document covering the question (despite having selected all previously loaded document option). Then ask for more details about the question.         
-**3.43-4.51**: RAG response without activating LLM's pre-existing knowledge base VS with LLM's knowledge option activated.     
+***0-0.26***: Load first pdf (waves_quantum.pdf) related to general quantum mechanics with tags (we could then directly talk to this document).     
+***0.26-0.42***: Load second pdf (quantum-computing.pdf) with appropriate tags.     
+***0.42-1.15***: Select previously loaded pdfs to talk, with possibility to filter based on tags.      
+***1.15-2.24***: Exemple of a query needing information from different documents (with accurate listing of used documents).      
+***2.24-3.43***: Exemple of custom instruction (answer in one sentence) and citation of the corresponding document covering the question (despite having selected all previously loaded document option). Then ask for more details about the question.         
+***3.43-4.51***: RAG response without activating LLM's pre-existing knowledge base VS with LLM's knowledge option activated.     
 
 ## Architecture
 
-Running in virtual environment through poetry or running as a contenerized app with Docker/Docker-compose (multi-services, multi-containers including RAGalactic app, ollama and genai ollama model auto pulling containers).
+Running in **virtual environment through poetry** or running as a **contenerized app with Docker/Docker-compose** (multi-services, multi-containers including RAGalactic app, ollama and genai ollama model auto pulling containers).
 
-language: Python    
-Frontend: Streamlit for gathering user's options and inputs as well as for building the conversational LLM interface. The application uses encrypted cookies to manage user sessions.   
-Backend: LlamaIndex as the RAG framework and PDF parsing tool, Pydantic for data input validation.    
-Database: Chroma database for storing user's embedded nodes.   
-LLM: Currently llama3 through ollama (`self.llm` attribute can be modified in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py)) 
-Embeddings model: Currently BAAI/bge-small-en-v1.5 through HuggingFace (`self.embed_model` attribute can be modified in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py))
+_language_: **Python**   
+_Frontend_: **Streamlit** for gathering user's options and inputs as well as for building the conversational LLM interface. The application uses encrypted cookies to manage user sessions.   
+_Backend_: **LlamaIndex** as the RAG framework and PDF parsing tool, **Pydantic** for data input validation.    
+_Database_: **Chroma database** for storing user's embedded nodes.   
+_LLM_: Currently **llama3** through **ollama** (`self.llm` attribute can be modified in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py)) 
+_Embeddings model_: Currently **BAAI/bge-small-en-v1.5** through **HuggingFace** (`self.embed_model` attribute can be modified in [rag.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/rag.py))
 
     
 [app.py](https://github.com/ValentinOzeel/RAGalactic/blob/main/RAGalacticPDF/src/app.py): Main application script to run the Streamlit app.    
