@@ -14,14 +14,14 @@ Furthermore, the documents used in generating responses are automatically cited 
 • **Interactive PDF Assistant running locally**: Engage with your PDF documents through a chatbot interface running locally on your machine.
 
 • **PDF Management**:    
-    - *Load New PDFs*:    
-        - Upload and process new PDF documents directly into the application.    
-        - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
-    - *Previously Loaded PDFs*:    
-        - Access and interact with PDFs that have been previously loaded into the system.    
-        - Filter by Tags:    
-            - All Tags Requirement: Filter PDFs requiring all specified tags for selection.    
-            - Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.     
+1. *Load New PDFs*:    
+    - Upload and process new PDF documents directly into the application.    
+    - Add tags to PDFs upon upload, facilitating organization and retrieval based on user-defined categories.    
+2. *Previously Loaded PDFs*:    
+    - Access and interact with PDFs that have been previously loaded into the system.    
+    - Filter by Tags:    
+        - All Tags Requirement: Filter PDFs requiring all specified tags for selection.    
+        - Any Tag Requirement: Filter PDFs requiring at least one of the specified tags for selection.     
 
 • **Conversation Modes**: Choose between a conversational mode for interactive discussions (with chat history awareness) or a question mode for straightforward queries.
 
