@@ -1,5 +1,7 @@
 # RAGalactic
 
+***_ APP DEMO VIDEO BELOW _***    
+
 **RAGalactic** is an interactive AI assistant embedded within a **Retrieval-Augmented Generation** (_RAG_) system, tailored for _PDF_ documents. This application allows users to engage with one or several of their PDFs through a _conversational AI interface_, offering detailed responses to user queries based on _document content and chat history_.    
     
 The application, which runs completely **locally**, maintains secure _user specific sessions_ with unique IDs and encrypted cookies, ensuring continuity across sessions.     
